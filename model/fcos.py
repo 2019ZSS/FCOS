@@ -64,11 +64,11 @@ class DetectHead(nn.Module):
     def forward(self,inputs):
         '''
         inputs  list [cls_logits,cnt_logits,reg_preds]  
-        cls_logits  list contains five [batch_size,class_num,h,w]  
-        cnt_logits  list contains five [batch_size,1,h,w]  
-        reg_preds   list contains five [batch_size,4,h,w] 
+        cls_logits  list contains five [P3~P7,batch_size,class_num,h,w]  
+        cnt_logits  list contains five [P3~P7,batch_size,1,h,w]  
+        reg_preds   list contains five [P3~P7,batch_size,4,h,w] 
         '''
-        cls_logits,coords=self._reshape_cat_out(inputs[0],self.strides)#[batch_size,sum(_h*_w),class_num]
+        cls_logits,coords=self._reshape_cat_out(inputs[0],self.strides)#[batch_size,sum(_h*_w),class_num], [sum(_h*_w), 2]
         cnt_logits,_=self._reshape_cat_out(inputs[1],self.strides)#[batch_size,sum(_h*_w),1]
         reg_preds,_=self._reshape_cat_out(inputs[2],self.strides)#[batch_size,sum(_h*_w),4]
 
@@ -76,12 +76,16 @@ class DetectHead(nn.Module):
         cnt_preds=cnt_logits.sigmoid_()
 
         coords =coords.cuda() if torch.cuda.is_available() else coords
-
+        
+        # tensor -> value,  tensor -> index
         cls_scores,cls_classes=torch.max(cls_preds,dim=-1)#[batch_size,sum(_h*_w)]
         if self.config.add_centerness:
+            # FCOS初版采用分类分数以及center-ness之积, 改进使用分类损失函数
             cls_scores = torch.sqrt(cls_scores*(cnt_preds.squeeze(dim=-1)))#[batch_size,sum(_h*_w)]
+        # add one -> one-hot
         cls_classes=cls_classes+1#[batch_size,sum(_h*_w)]
-
+        
+        # 利用中心点坐标和四个方向的距离复原检测边框
         boxes=self._coords2boxes(coords,reg_preds)#[batch_size,sum(_h*_w),4]
 
         #select topk
@@ -111,10 +115,12 @@ class DetectHead(nn.Module):
         _boxes_post=[]
         cls_scores_topk,cls_classes_topk,boxes_topk=preds_topk
         for batch in range(cls_classes_topk.shape[0]):
+            # 分数阙值，论文中为0.05
             mask=cls_scores_topk[batch]>=self.score_threshold
             _cls_scores_b=cls_scores_topk[batch][mask]#[?]
             _cls_classes_b=cls_classes_topk[batch][mask]#[?]
             _boxes_b=boxes_topk[batch][mask]#[?,4]
+            # nsm处理
             nms_ind=self.batched_nms(_boxes_b,_cls_scores_b,_cls_classes_b,self.nms_iou_threshold)
             _cls_scores_post.append(_cls_scores_b[nms_ind])
             _cls_classes_post.append(_cls_classes_b[nms_ind])
@@ -158,7 +164,7 @@ class DetectHead(nn.Module):
         return torch.LongTensor(keep)
 
     def batched_nms(self,boxes, scores, idxs, iou_threshold):
-        
+        '''idx: class'''
         if boxes.numel() == 0:
             return torch.empty((0,), dtype=torch.int64, device=boxes.device)
         # strategy: in order to perform NMS independently per class.
@@ -196,7 +202,7 @@ class DetectHead(nn.Module):
         out=[]
         coords=[]
         for pred,stride in zip(inputs,strides):
-            pred=pred.permute(0,2,3,1)
+            pred=pred.permute(0,2,3,1) # [batch_size,h,w,c]
             coord=coords_fmap2orig(pred,stride).to(device=pred.device)
             pred=torch.reshape(pred,[batch_size,-1,c])
             out.append(pred)

@@ -10,8 +10,8 @@ import torch.backends.cudnn as cudnn
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epochs", type=int, default=30, help="number of epochs")
-parser.add_argument("--batch_size", type=int, default=16, help="size of each image batch")
+parser.add_argument("--epochs", type=int, default=100, help="number of epochs")
+parser.add_argument("--batch_size", type=int, default=8, help="size of each image batch")
 parser.add_argument("--n_cpu", type=int, default=4, help="number of cpu threads to use during batch generation")
 parser.add_argument("--n_gpu", type=str, default='0,1', help="number of cpu threads to use during batch generation")
 opt = parser.parse_args()
@@ -24,11 +24,14 @@ cudnn.benchmark = False
 cudnn.deterministic = True
 random.seed(0)
 transform = Transforms()
-train_dataset = VOCDataset(root_dir='/Users/VOC0712',resize_size=[800,1333],
+# [800, 1333]
+resize_size=[800,1333]
+train_dataset = VOCDataset(root_dir='/home/stu/zss/VOC/VOCdevkit/VOC2007',resize_size=resize_size,
                            split='trainval',use_difficult=False,is_train=True,augment=transform)
 
 model = FCOSDetector(mode="training").cuda()
 model = torch.nn.DataParallel(model)
+# model.load_state_dict(torch.load('./checkpoint/model_100.pth'))
 # model.load_state_dict(torch.load('/mnt/cephfs_new_wj/vc/zhangzhenghao/FCOS.Pytorch/output1/model_6.pth'))
 
 BATCH_SIZE = opt.batch_size
@@ -44,8 +47,10 @@ WARMPUP_STEPS = 501
 
 GLOBAL_STEPS = 1
 LR_INIT = 2e-3
+# LR_INIT = 1e-2
 LR_END = 2e-5
-optimizer = torch.optim.SGD(model.parameters(),lr =LR_INIT,momentum=0.9,weight_decay=0.0001)
+# LR_END = 2e-2
+optimizer = torch.optim.SGD(model.parameters(),lr = LR_INIT, momentum=0.9, weight_decay = 0.0001)
 
 # def lr_func():
 #      if GLOBAL_STEPS < WARMPUP_STEPS:
@@ -97,8 +102,7 @@ for epoch in range(EPOCHS):
 
         GLOBAL_STEPS += 1
 
-    torch.save(model.state_dict(),
-               "./checkpoint/model_{}.pth".format(epoch + 1))
+    torch.save(model.state_dict(), "./checkpoint/VOC2007/model_{}_{}_{}_{}.pth".format(BATCH_SIZE, resize_size[0],resize_size[1], epoch + 1))
 
 
 

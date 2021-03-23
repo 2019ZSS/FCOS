@@ -28,7 +28,12 @@ class ClsCntRegHead(nn.Module):
         reg_branch=[]
 
         for i in range(4):
+            # 网络层数增加，这增加了网络的非线性表达能力同时不过多增加网络参数 
             cls_branch.append(nn.Conv2d(in_channel,in_channel,kernel_size=3,padding=1,bias=True))
+            # BN 需要用到足够大的批大小（例如，每个工作站采用 32 的批量大小）。
+            # 一个小批量会导致估算批统计不准确，减小 BN 的批大小会极大地增加模型错误率。
+            # 将channel方向分group，然后每个group内做归一化，算(C//G)*H*W的均值， 
+            # GN 把通道分为组，并计算每一组之内的均值和方差，以进行归一化。GN 的计算与批量大小无关，其精度也在各种批量大小下保持稳定
             if GN:
                 cls_branch.append(nn.GroupNorm(32,in_channel))
             cls_branch.append(nn.ReLU(True))
@@ -38,12 +43,12 @@ class ClsCntRegHead(nn.Module):
                 reg_branch.append(nn.GroupNorm(32,in_channel))
             reg_branch.append(nn.ReLU(True))
 
-        self.cls_conv=nn.Sequential(*cls_branch)
-        self.reg_conv=nn.Sequential(*reg_branch)
+        self.cls_conv = nn.Sequential(*cls_branch)
+        self.reg_conv = nn.Sequential(*reg_branch)
 
-        self.cls_logits=nn.Conv2d(in_channel,class_num,kernel_size=3,padding=1)
-        self.cnt_logits=nn.Conv2d(in_channel,1,kernel_size=3,padding=1)
-        self.reg_pred=nn.Conv2d(in_channel,4,kernel_size=3,padding=1)
+        self.cls_logits = nn.Conv2d(in_channel,class_num,kernel_size=3,padding=1)
+        self.cnt_logits = nn.Conv2d(in_channel,1,kernel_size=3,padding=1)
+        self.reg_pred = nn.Conv2d(in_channel,4,kernel_size=3,padding=1)
         
         self.apply(self.init_conv_RandomNormal)
         

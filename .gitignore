@@ -1,0 +1,8 @@
+/.vscode/
+*/__pycache__
+model/backbone/__pycache__/
+*.ipynb
+.ipynb_checkpoints
+checkpoint/
+coco_bbox_results.json
+

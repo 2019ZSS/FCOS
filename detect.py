@@ -6,7 +6,7 @@ import numpy as np
 from dataset.VOC_dataset import VOCDataset
 import time
 import matplotlib.patches as patches
-import  matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from matplotlib.ticker import NullLocator
 
 def preprocess_img(image,input_ksize):
@@ -50,6 +50,7 @@ def convertSyncBNtoBN(module):
         module_output.add_module(name,convertSyncBNtoBN(child))
     del module
     return module_output
+
 if __name__=="__main__":
     cmap = plt.get_cmap('tab20b')
     colors = [cmap(i) for i in np.linspace(0, 1, 20)]
@@ -86,7 +87,7 @@ if __name__=="__main__":
     model.load_state_dict(torch.load("./checkpoint/voc_78.7.pth",map_location=torch.device('cpu')))
     # model=convertSyncBNtoBN(model)
     # print("INFO===>success convert SyncBN to BN")
-    model=model.eval()
+    model = model.eval()
     print("===>success loading model")
 
     import os

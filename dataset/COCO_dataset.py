@@ -54,6 +54,7 @@ class COCODataset(CocoDetection):
         self.mean=[0.40789654, 0.44719302, 0.47026115]
         self.std=[0.28863828, 0.27408164, 0.27809835]
         self.train = is_train
+        
     def __getitem__(self,index):
 
         img,ann=super().__getitem__(index)
@@ -172,7 +173,7 @@ class COCODataset(CocoDetection):
 
 if __name__=="__main__":
 
-    dataset=COCODataset("/home/data/coco2017/train2017","/home/data/coco2017/instances_train2017.json")
+    dataset=COCODataset("/home/stu/zss/COCO/coco2017/train2017","/home/stu/zss/COCO/coco2017/annotations/instances_train2017.json")
     # img,boxes,classes=dataset[0]
     # print(boxes,classes,"\n",img.shape,boxes.shape,classes.shape,boxes.dtype,classes.dtype,img.dtype)
     # cv2.imwrite("./123.jpg",img)

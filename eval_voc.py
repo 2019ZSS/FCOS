@@ -124,11 +124,12 @@ def eval_ap_2d(gt_boxes, gt_labels, pred_boxes, pred_labels, pred_scores, iou_th
 
 if __name__=="__main__":
     from model.fcos import FCOSDetector
-    from demo import convertSyncBNtoBN
+#     from demo import convertSyncBNtoBN
     from dataset.VOC_dataset import VOCDataset
     
-
-    eval_dataset = VOCDataset(root_dir='/Users/zhangzhenghao/VOC0712', resize_size=[800, 1333],
+    resize_size = [400, 667]
+    resize_size = [800, 1333]
+    eval_dataset = VOCDataset(root_dir='/home/stu/zss/VOC/VOCdevkit/VOC2007', resize_size=resize_size,
                                split='test', use_difficult=False, is_train=False, augment=None)
     print("INFO===>eval dataset has %d imgs"%len(eval_dataset))
     eval_loader=torch.utils.data.DataLoader(eval_dataset,batch_size=1,shuffle=False,collate_fn=eval_dataset.collate_fn)
@@ -137,7 +138,10 @@ if __name__=="__main__":
     # model=torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     # print("INFO===>success convert BN to SyncBN")
     model = torch.nn.DataParallel(model)
-    model.load_state_dict(torch.load("./checkpoint/voc_78.7.pth",map_location=torch.device('cpu')))
+#     model_path = './checkpoint/VOC2007/model_90.pth'
+    model_path = './checkpoint/VOC2007/model_8_800_1333_45.pth'
+#     model_path = './checkpoint/voc_77.8.pth'
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     # model=convertSyncBNtoBN(model)
     # print("INFO===>success convert SyncBN to BN")
     model=model.cuda().eval()

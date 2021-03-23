@@ -183,9 +183,11 @@ def evaluate_coco(generator, model, threshold=0.05):
     return coco_eval.stats
 
 if __name__ == "__main__":
-    generator=COCOGenerator("/Users/coco2017/val2017","/Users/coco2017/instances_val2017.json")
-    model=FCOSDetector(mode="inference")
+    generator = COCOGenerator("/home/stu/zss/COCO/coco2017/val2017","/home/stu/zss/COCO/coco2017/annotations/instances_val2017.json")
+    model = FCOSDetector(mode="inference")
     model = torch.nn.DataParallel(model)
     model = model.cuda().eval()
-    model.load_state_dict(torch.load("./checkpoint/coco_37.2.pth",map_location=torch.device('cpu')))
+    mode_path = './checkpoint/coco_37.2.pth'
+    mode_path = './checkpoint/coco2017/model_10.pth'
+    model.load_state_dict(torch.load(mode_path,map_location=torch.device('cpu')))
     evaluate_coco(generator,model)

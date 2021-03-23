@@ -4,7 +4,7 @@ import os
 import cv2
 import numpy as np
 from torchvision import transforms
-from PIL import  Image
+from PIL import Image
 import random
 
 def flip(img, boxes):
@@ -46,9 +46,9 @@ class VOCDataset(torch.utils.data.Dataset):
         self.use_difficult=use_difficult
         self.imgset=split
 
-        self._annopath = os.path.join(self.root, "Annotations", "%s.xml")
-        self._imgpath = os.path.join(self.root, "JPEGImages", "%s.jpg")
-        self._imgsetpath = os.path.join(self.root, "ImageSets", "Main", "%s.txt")
+        self._annopath = os.path.join(self.root, "Annotations", "%s.xml") # #存放标签文件，与JPEGImages中的图片一一对应
+        self._imgpath = os.path.join(self.root, "JPEGImages", "%s.jpg") 
+        self._imgsetpath = os.path.join(self.root, "ImageSets", "Main", "%s.txt") #该目录下存放的都是txt文件，txt文件中每一行包含一个图片的名称
 
         with open(self._imgsetpath%self.imgset) as f:
             self.img_ids=f.readlines()
@@ -141,6 +141,7 @@ class VOCDataset(torch.utils.data.Dataset):
             boxes[:, [0, 2]] = boxes[:, [0, 2]] * scale
             boxes[:, [1, 3]] = boxes[:, [1, 3]] * scale
             return image_paded, boxes
+        
     def collate_fn(self,data):
         imgs_list,boxes_list,classes_list=zip(*data)
         assert len(imgs_list)==len(boxes_list)==len(classes_list)
@@ -175,10 +176,12 @@ class VOCDataset(torch.utils.data.Dataset):
 
 
 if __name__=="__main__":
-    pass
-    eval_dataset = VOCDataset(root_dir='/Users/VOCdevkit/VOCdevkit/VOC0712', resize_size=[800, 1333],
-                               split='test', use_difficult=False, is_train=False, augment=None)
+    eval_dataset = VOCDataset(root_dir='/home/stu/zss/VOC/VOCdevkit/VOC2012', resize_size=[800, 1333],
+                               split='trainval', use_difficult=False, is_train=True, augment=None)
     print(len(eval_dataset.CLASSES_NAME))
+    for x in eval_dataset:
+        print(x)
+        break
     #dataset=VOCDataset("/home/data/voc2007_2012/VOCdevkit/VOC2012",split='trainval')
     # for i in range(100):
     #     img,boxes,classes=dataset[i]

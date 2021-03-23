@@ -4,8 +4,6 @@ import torch.nn as nn
 from .config import DefaultConfig
 
 
-
-
 def coords_fmap2orig(feature,stride):
     '''
     transfor one fmap coords to orig coords
@@ -14,11 +12,13 @@ def coords_fmap2orig(feature,stride):
     stride int
     Returns 
     coords [n,2]
+    生成特征图映射到原始图像中的坐标（x,y)
     '''
     h,w=feature.shape[1:3]
+    # 创建从0开始 以原图宽度结束 步幅为缩放比例的列表
     shifts_x = torch.arange(0, w * stride, stride, dtype=torch.float32)
     shifts_y = torch.arange(0, h * stride, stride, dtype=torch.float32)
-
+     
     shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
     shift_x = torch.reshape(shift_x, [-1])
     shift_y = torch.reshape(shift_y, [-1])
@@ -36,9 +36,9 @@ class GenTargets(nn.Module):
         '''
         inputs  
         [0]list [cls_logits,cnt_logits,reg_preds]  
-        cls_logits  list contains five [batch_size,class_num,h,w]  
-        cnt_logits  list contains five [batch_size,1,h,w]  
-        reg_preds   list contains five [batch_size,4,h,w]  
+        cls_logits  list contains five [P3~P7,batch_size,class_num,h,w]  
+        cnt_logits  list contains five [P3~P7,batch_size,1,h,w]  
+        reg_preds   list contains five [P3~P7,batch_size,4,h,w]  
         [1]gt_boxes [batch_size,m,4]  FloatTensor  
         [2]classes [batch_size,m]  LongTensor
         Returns
@@ -65,6 +65,7 @@ class GenTargets(nn.Module):
 
     def _gen_level_targets(self,out,gt_boxes,classes,stride,limit_range,sample_radiu_ratio=1.5):
         '''
+        正负样本的生成
         Args  
         out list contains [[batch_size,class_num,h,w],[batch_size,1,h,w],[batch_size,4,h,w]]  
         gt_boxes [batch_size,m,4]  
@@ -80,13 +81,14 @@ class GenTargets(nn.Module):
         m=gt_boxes.shape[1]
 
         cls_logits=cls_logits.permute(0,2,3,1) #[batch_size,h,w,class_num]  
+        # 生成特征图映射到原始图像中的坐标（x,y)
         coords=coords_fmap2orig(cls_logits,stride).to(device=gt_boxes.device)#[h*w,2]
 
         cls_logits=cls_logits.reshape((batch_size,-1,class_num))#[batch_size,h*w,class_num]  
         cnt_logits=cnt_logits.permute(0,2,3,1)
-        cnt_logits=cnt_logits.reshape((batch_size,-1,1))
+        cnt_logits=cnt_logits.reshape((batch_size,-1,1)) #[batch_size,h * w, 1]
         reg_preds=reg_preds.permute(0,2,3,1)
-        reg_preds=reg_preds.reshape((batch_size,-1,4))
+        reg_preds=reg_preds.reshape((batch_size,-1,4)) # [batch_size,h * w, 4]
 
         h_mul_w=cls_logits.shape[1]
 
@@ -98,18 +100,19 @@ class GenTargets(nn.Module):
         b_off=gt_boxes[...,3][:,None,:]-y[None,:,None]
         ltrb_off=torch.stack([l_off,t_off,r_off,b_off],dim=-1)#[batch_size,h*w,m,4]
 
-        areas=(ltrb_off[...,0]+ltrb_off[...,2])*(ltrb_off[...,1]+ltrb_off[...,3])#[batch_size,h*w,m]
-
+        areas=(ltrb_off[...,0]+ltrb_off[...,2])*(ltrb_off[...,1]+ltrb_off[...,3])#[batch_size,h*w,m] (l+r)*(t+b)
+ 
         off_min=torch.min(ltrb_off,dim=-1)[0]#[batch_size,h*w,m]
         off_max=torch.max(ltrb_off,dim=-1)[0]#[batch_size,h*w,m]
-
+        # 找到（l,r,t,b）中最小的，如果最小的大于０，那么这个点肯定在对应的gt框里面，则置１，否则为０
         mask_in_gtboxes=off_min>0
+        # 找到（l,r,t,b）中最大的，如果最大的满足范围约束，则置１，否则为０
         mask_in_level=(off_max>limit_range[0])&(off_max<=limit_range[1])
 
-        radiu=stride*sample_radiu_ratio
+        radiu=stride*sample_radiu_ratio # 距离因子
         gt_center_x=(gt_boxes[...,0]+gt_boxes[...,2])/2
         gt_center_y=(gt_boxes[...,1]+gt_boxes[...,3])/2
-        c_l_off=x[None,:,None]-gt_center_x[:,None,:]#[1,h*w,1]-[batch_size,1,m]-->[batch_size,h*w,m]
+        c_l_off=x[None,:,None]-gt_center_x[:,None,:] #[1,h*w,1]-[batch_size,1,m]-->[batch_size,h*w,m]
         c_t_off=y[None,:,None]-gt_center_y[:,None,:]
         c_r_off=gt_center_x[:,None,:]-x[None,:,None]
         c_b_off=gt_center_y[:,None,:]-y[None,:,None]
@@ -118,8 +121,10 @@ class GenTargets(nn.Module):
         mask_center=c_off_max<radiu
 
         mask_pos=mask_in_gtboxes&mask_in_level&mask_center#[batch_size,h*w,m]
-
-        areas[~mask_pos]=99999999
+        # 找到（l,r,t,b）中最大的，如果最大的满足范围约束，则置１，否则为０
+        # 将不满足范围约束的也置为无穷，因为下面的代码要找最小的
+        areas[~mask_pos]=99999999 # 无穷远
+        # 找到每个点对应的面积最小的gt框（因为可能有多个，论文取了最小的）
         areas_min_ind=torch.min(areas,dim=-1)[1]#[batch_size,h*w]
         reg_targets=ltrb_off[torch.zeros_like(areas,dtype=torch.bool).scatter_(-1,areas_min_ind.unsqueeze(dim=-1),1)]#[batch_size*h*w,4]
         reg_targets=torch.reshape(reg_targets,(batch_size,-1,4))#[batch_size,h*w,4]
@@ -127,7 +132,8 @@ class GenTargets(nn.Module):
         classes=torch.broadcast_tensors(classes[:,None,:],areas.long())[0]#[batch_size,h*w,m]
         cls_targets=classes[torch.zeros_like(areas,dtype=torch.bool).scatter_(-1,areas_min_ind.unsqueeze(dim=-1),1)]
         cls_targets=torch.reshape(cls_targets,(batch_size,-1,1))#[batch_size,h*w,1]
-
+        
+        # center-ness
         left_right_min = torch.min(reg_targets[..., 0], reg_targets[..., 2])#[batch_size,h*w]
         left_right_max = torch.max(reg_targets[..., 0], reg_targets[..., 2])
         top_bottom_min = torch.min(reg_targets[..., 1], reg_targets[..., 3])
@@ -144,7 +150,7 @@ class GenTargets(nn.Module):
         # assert num_pos.shape==(batch_size,)
         mask_pos_2=mask_pos_2>=1
         assert mask_pos_2.shape==(batch_size,h_mul_w)
-        cls_targets[~mask_pos_2]=0#[batch_size,h*w,1]
+        cls_targets[~mask_pos_2]=0#[batch_size,h*w,1] 负样本
         cnt_targets[~mask_pos_2]=-1
         reg_targets[~mask_pos_2]=-1
         

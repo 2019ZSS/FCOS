@@ -24,8 +24,10 @@ cudnn.benchmark = False
 cudnn.deterministic = True
 random.seed(0)
 transform = Transforms()
-train_dataset=COCODataset("./Users/Downloads/train2017",
-                          '/Users/Downloads/coco2017/instances_train2017.json',transform=transform)
+resize_size=[400,667]
+train_dataset = COCODataset(imgs_path="/home/stu/zss/COCO/coco2017/train2017",
+                  anno_path='/home/stu/zss/COCO/coco2017/annotations/instances_train2017.json',
+                  is_train=True,resize_size=resize_size,transform=transform)
 
 
 model=FCOSDetector(mode="training").cuda()
@@ -86,7 +88,7 @@ for epoch in range(EPOCHS):
 
         GLOBAL_STEPS+=1
     
-    torch.save(model.state_dict(),"./checkpoint/model_{}.pth".format(epoch+1))
+    torch.save(model.state_dict(), "./checkpoint/coco2017/model_{}.pth".format(epoch+1))
     
 
 
