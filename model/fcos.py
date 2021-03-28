@@ -1,11 +1,10 @@
 from .head import ClsCntRegHead
-from .fpn_neck import FPN
+from .fpn_neck import FPN, SIMO
 from .backbone.resnet import resnet50
 import torch.nn as nn
 from .loss import GenTargets,LOSS,coords_fmap2orig
 import torch
 from .config import DefaultConfig
-
 
 
 class FCOS(nn.Module):
@@ -15,10 +14,16 @@ class FCOS(nn.Module):
         if config is None:
             config=DefaultConfig
         self.backbone=resnet50(pretrained=config.pretrained,if_include_top=False)
-        self.fpn=FPN(config.fpn_out_channels,use_p5=config.use_p5)
+        if config.use_simo:
+            self.fpn=SIMO(encoder_cfg=config.encoder_cfg, 
+                            backbone_level_used=config.backbone_level_used,
+                            features=config.fpn_out_channels)
+        else:
+            self.fpn=FPN(config.fpn_out_channels,use_p5=config.use_p5)
         self.head=ClsCntRegHead(config.fpn_out_channels,config.class_num,
-                                config.use_GN_head,config.cnt_on_reg,config.prior)
+                                config.use_GN_head,config.cnt_on_reg,config.prior, config.use_asff)
         self.config=config
+
     def train(self,mode=True):
         '''
         set module training mode, and frozen bn

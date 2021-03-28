@@ -10,7 +10,7 @@ import torch.backends.cudnn as cudnn
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epochs", type=int, default=100, help="number of epochs")
+parser.add_argument("--epochs", type=int, default=60, help="number of epochs")
 parser.add_argument("--batch_size", type=int, default=8, help="size of each image batch")
 parser.add_argument("--n_cpu", type=int, default=4, help="number of cpu threads to use during batch generation")
 parser.add_argument("--n_gpu", type=str, default='0,1', help="number of cpu threads to use during batch generation")
@@ -25,7 +25,7 @@ cudnn.deterministic = True
 random.seed(0)
 transform = Transforms()
 # [800, 1333]
-resize_size=[800,1333]
+resize_size=[800,1200]
 train_dataset = VOCDataset(root_dir='/home/stu/zss/VOC/VOCdevkit/VOC2007',resize_size=resize_size,
                            split='trainval',use_difficult=False,is_train=True,augment=transform)
 
@@ -102,7 +102,7 @@ for epoch in range(EPOCHS):
 
         GLOBAL_STEPS += 1
 
-    torch.save(model.state_dict(), "./checkpoint/VOC2007/model_{}_{}_{}_{}.pth".format(BATCH_SIZE, resize_size[0],resize_size[1], epoch + 1))
+    torch.save(model.state_dict(), "./checkpoint/simo/model_{}_{}_{}_{}.pth".format(BATCH_SIZE, resize_size[0],resize_size[1], epoch + 1))
 
 
 

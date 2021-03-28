@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.nn.modules import padding 
 
 
-def add_conv(in_ch: int, out_ch: int, ksize: int, stride: int, leaky=True, GN=False):
+def add_conv(in_ch: int, out_ch: int, ksize: int, stride: int, leaky=True, GN=True):
     """
     Add a conv2d / batchnorm / leaky ReLU block.
     Args:
@@ -23,7 +23,7 @@ def add_conv(in_ch: int, out_ch: int, ksize: int, stride: int, leaky=True, GN=Fa
                                     kernel_size=ksize, stride=stride, 
                                     padding=pad, bias=False))
     if GN:
-        stage.add_module('gruop_norm', nn.GroupNorm(32, out_ch))
+        stage.add_module('gruop_norm', nn.GroupNorm(16, out_ch))
     else:
         stage.add_module('batch_norm', nn.BatchNorm2d(out_ch))
     if leaky:
@@ -84,7 +84,6 @@ class ASFF(nn.Module):
         level__0_weight_v = self.weight_level_0(level_0_resized)
         level__1_weight_v = self.weight_level_1(level_1_resized)
         level__2_weight_v = self.weight_level_2(level_2_resized)
-        print(level__0_weight_v.shape, level__1_weight_v.shape, level__2_weight_v.shape)
         levels_weight_v = torch.cat((level__0_weight_v, level__1_weight_v, level__2_weight_v), dim=1)
         levels_weight = F.softmax(self.weight_levels(levels_weight_v), dim=1)
 

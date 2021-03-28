@@ -129,6 +129,7 @@ if __name__=="__main__":
     
     resize_size = [400, 667]
     resize_size = [800, 1333]
+    resize_size = [800, 1200]
     eval_dataset = VOCDataset(root_dir='/home/stu/zss/VOC/VOCdevkit/VOC2007', resize_size=resize_size,
                                split='test', use_difficult=False, is_train=False, augment=None)
     print("INFO===>eval dataset has %d imgs"%len(eval_dataset))
@@ -140,6 +141,8 @@ if __name__=="__main__":
     model = torch.nn.DataParallel(model)
 #     model_path = './checkpoint/VOC2007/model_90.pth'
     model_path = './checkpoint/VOC2007/model_8_800_1333_45.pth'
+    model_path = './checkpoint/use_asff/model_8_800_1200_60.pth'
+    model_path = './checkpoint/simo/model_8_800_1200_30.pth'
 #     model_path = './checkpoint/voc_77.8.pth'
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     # model=convertSyncBNtoBN(model)

@@ -1,7 +1,9 @@
 
+from torch._C import device
 import torch.nn as nn
 import torch
 import math
+from .asff import ASFF
 
 class ScaleExp(nn.Module):
     def __init__(self,init_value=1.0):
@@ -11,7 +13,7 @@ class ScaleExp(nn.Module):
         return torch.exp(x*self.scale)
 
 class ClsCntRegHead(nn.Module):
-    def __init__(self,in_channel,class_num,GN=True,cnt_on_reg=True,prior=0.01):
+    def __init__(self,in_channel,class_num,GN=True,cnt_on_reg=True,prior=0.01,use_asff=False):
         '''
         Args  
         in_channel  
@@ -23,7 +25,8 @@ class ClsCntRegHead(nn.Module):
         self.prior=prior
         self.class_num=class_num
         self.cnt_on_reg=cnt_on_reg
-        
+        self.use_asff = use_asff
+
         cls_branch=[]
         reg_branch=[]
 
@@ -42,6 +45,9 @@ class ClsCntRegHead(nn.Module):
             if GN:
                 reg_branch.append(nn.GroupNorm(32,in_channel))
             reg_branch.append(nn.ReLU(True))
+
+        if self.use_asff:
+            self.asffs = nn.ModuleList([ASFF(2 - i) for i in range(3)])
 
         self.cls_conv = nn.Sequential(*cls_branch)
         self.reg_conv = nn.Sequential(*reg_branch)
@@ -68,8 +74,13 @@ class ClsCntRegHead(nn.Module):
         cnt_logits=[]
         reg_preds=[]
         for index,P in enumerate(inputs):
-            cls_conv_out=self.cls_conv(P)
-            reg_conv_out=self.reg_conv(P)
+            if self.use_asff and index < 3:
+                asff_P = self.asffs[index](inputs[2], inputs[1], inputs[0])
+                cls_conv_out = self.cls_conv(asff_P)
+                reg_conv_out = self.reg_conv(asff_P)
+            else:
+                cls_conv_out = self.cls_conv(P)
+                reg_conv_out = self.reg_conv(P)
 
             cls_logits.append(self.cls_logits(cls_conv_out))
             if not self.cnt_on_reg:
