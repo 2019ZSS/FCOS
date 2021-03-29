@@ -25,8 +25,9 @@ cudnn.deterministic = True
 random.seed(0)
 transform = Transforms()
 # [800, 1333]
-resize_size=[800,1200]
-train_dataset = VOCDataset(root_dir='/home/stu/zss/VOC/VOCdevkit/VOC2007',resize_size=resize_size,
+# resize_size=[800,1200]
+resize_size=[512,512]
+train_dataset = VOCDataset(root_dir='./data/VOCdevkit/VOC2007',resize_size=resize_size,
                            split='trainval',use_difficult=False,is_train=True,augment=transform)
 
 model = FCOSDetector(mode="training").cuda()
@@ -102,7 +103,7 @@ for epoch in range(EPOCHS):
 
         GLOBAL_STEPS += 1
 
-    torch.save(model.state_dict(), "./checkpoint/simo/model_{}_{}_{}_{}.pth".format(BATCH_SIZE, resize_size[0],resize_size[1], epoch + 1))
+    torch.save(model.state_dict(), "./checkpoint/simo_asff/model_{}_{}_{}_{}.pth".format(BATCH_SIZE, resize_size[0],resize_size[1], epoch + 1))
 
 
 

@@ -18,6 +18,7 @@ def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
+
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -48,6 +49,8 @@ class BasicBlock(nn.Module):
         out = self.relu(out)
 
         return out
+
+        
 class Bottleneck(nn.Module):
     # ResNet-B
     expansion = 4
@@ -86,6 +89,8 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
 
         return out
+
+
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=1000,if_include_top=False):
@@ -165,6 +170,7 @@ class ResNet(nn.Module):
             layer.eval()
             for param in layer.parameters():
                 param.requires_grad = False
+   
                 
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.

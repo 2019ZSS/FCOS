@@ -1,10 +1,11 @@
 from .head import ClsCntRegHead
 from .fpn_neck import FPN, SIMO
-from .backbone.resnet import resnet50
+from .backbone import build_backbone
 import torch.nn as nn
 from .loss import GenTargets,LOSS,coords_fmap2orig
 import torch
 from .config import DefaultConfig
+from model import config
 
 
 class FCOS(nn.Module):
@@ -13,7 +14,7 @@ class FCOS(nn.Module):
         super().__init__()
         if config is None:
             config=DefaultConfig
-        self.backbone=resnet50(pretrained=config.pretrained,if_include_top=False)
+        self.backbone = build_backbone(config.backbone_name, config.pretrained, config.out_stages)
         if config.use_simo:
             self.fpn=SIMO(encoder_cfg=config.encoder_cfg, 
                             backbone_level_used=config.backbone_level_used,
@@ -21,7 +22,8 @@ class FCOS(nn.Module):
         else:
             self.fpn=FPN(config.fpn_out_channels,use_p5=config.use_p5)
         self.head=ClsCntRegHead(config.fpn_out_channels,config.class_num,
-                                config.use_GN_head,config.cnt_on_reg,config.prior, config.use_asff)
+                                config.use_GN_head,config.cnt_on_reg,config.prior, 
+                                config.use_asff, config.use_dcn)
         self.config=config
 
     def train(self,mode=True):
@@ -38,7 +40,7 @@ class FCOS(nn.Module):
         if self.config.freeze_bn:
             self.apply(freeze_bn)
             print("INFO===>success frozen BN")
-        if self.config.freeze_stage_1:
+        if self.config.freeze_stage_1 and hasattr(self.backbone, 'freeze_stages'):
             self.backbone.freeze_stages(1)
             print("INFO===>success frozen backbone stage1")
 
@@ -50,9 +52,10 @@ class FCOS(nn.Module):
         cnt_logits  list contains five [batch_size,1,h,w]
         reg_preds   list contains five [batch_size,4,h,w]
         '''
-        C3,C4,C5=self.backbone(x)
-        all_P=self.fpn([C3,C4,C5])
-        cls_logits,cnt_logits,reg_preds=self.head(all_P)
+        # C3,C4,C5=self.backbone(x)
+        C = self.backbone(x)
+        all_P = self.fpn(C)
+        cls_logits,cnt_logits,reg_preds = self.head(all_P)
         return [cls_logits,cnt_logits,reg_preds]
 
 class DetectHead(nn.Module):

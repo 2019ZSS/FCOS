@@ -25,8 +25,8 @@ cudnn.deterministic = True
 random.seed(0)
 transform = Transforms()
 resize_size=[400,667]
-train_dataset = COCODataset(imgs_path="/home/stu/zss/COCO/coco2017/train2017",
-                  anno_path='/home/stu/zss/COCO/coco2017/annotations/instances_train2017.json',
+train_dataset = COCODataset(imgs_path="./data/coco/coco2017/train2017",
+                  anno_path='./data/coco/coco2017/annotations/instances_train2017.json',
                   is_train=True,resize_size=resize_size,transform=transform)
 
 

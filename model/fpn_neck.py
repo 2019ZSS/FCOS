@@ -57,9 +57,9 @@ class SIMO(nn.Module):
 
     def __init__(self, encoder_cfg, backbone_level_used=2, features=256):
         super(SIMO, self).__init__()
-        in_channels_list = [512, 1024, 2048]
-        assert backbone_level_used >= 0 and backbone_level_used <= len(in_channels_list)
-        encoder_cfg.in_channels = in_channels_list[backbone_level_used]
+        # in_channels_list = [512, 1024, 2048]
+        # assert backbone_level_used >= 0 and backbone_level_used <= len(in_channels_list)
+        # encoder_cfg.in_channels = in_channels_list[backbone_level_used]
         encoder_cfg.encoder_channels = features
         self.backbone_level_used = backbone_level_used
         self.encoder = nn.Sequential(DilatedEncoder(encoder_cfg))
@@ -70,7 +70,7 @@ class SIMO(nn.Module):
         self.conv_out7 = nn.Conv2d(features, features, kernel_size=3, padding=1, stride=2)
         self.apply(self.init_conv_kaiming)
 
-    def init_conv_kaiming(self,module):
+    def init_conv_kaiming(self, module):
         if isinstance(module, nn.Conv2d):
             nn.init.kaiming_uniform_(module.weight, a=1)
 
@@ -79,7 +79,7 @@ class SIMO(nn.Module):
 
     def forward(self, x):
         
-        C = x[self.backbone_level_used]
+        C = x[-1]
 
         P5 = self.encoder(C)
         P4 = F.interpolate(P5, scale_factor=2, mode='nearest')

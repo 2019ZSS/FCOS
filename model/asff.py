@@ -63,7 +63,20 @@ class ASFF(nn.Module):
     
         self.weight_levels = nn.Conv2d(compress_c * 3, 3, kernel_size=1, stride=1, padding=0)
         self.vis = vis 
-    
+        self.apply(self._init_weight)
+
+    def _init_weight(self, module):
+        if isinstance(module, nn.Conv2d):
+            nn.init.kaiming_uniform_(module.weight, a=1)
+
+            if module.bias is not None:
+                nn.init.constant_(module.bias, 0)
+        
+        if isinstance(module, (nn.BatchNorm2d, nn.GroupNorm, nn.SyncBatchNorm)):
+            nn.init.constant_(module.weight, 1)
+            if module.bias is not None:
+                nn.init.constant_(module.bias, 0)
+
     def forward(self, x_level_0, x_level_1, x_level_2):
         if self.level == 0:
             level_0_resized = x_level_0

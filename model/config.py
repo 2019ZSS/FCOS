@@ -1,5 +1,5 @@
 class DilatedEncoderConfig(object):
-        in_channels = 2048
+        in_channels = 448
         encoder_channels = 256
         block_mid_channels = 128
         num_residual_blocks = 4
@@ -10,7 +10,9 @@ class DilatedEncoderConfig(object):
 
 class DefaultConfig():
     #backbone
+    backbone_name='efficientnet_lite4'
     pretrained=True
+    out_stages=(6,)
     freeze_stage_1=True
     freeze_bn=True
 
@@ -28,7 +30,7 @@ class DefaultConfig():
     add_centerness=True
     cnt_on_reg=True
     use_asff=False
-
+    use_dcn=False
     #training
     strides=[8,16,32,64,128]
     limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]]

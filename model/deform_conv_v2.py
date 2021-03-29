@@ -21,7 +21,7 @@ class DeformConv2d(nn.Module):
         self.stride = stride
         self.zero_padding = nn.ZeroPad2d(padding=padding)
         self.conv = nn.Conv2d(inc, outc, kernel_size=kernel_size, stride=kernel_size, bias=bias)
-
+        self._init_conv_kaiming(self.conv)
         self.p_conv = nn.Conv2d(inc, 2*kernel_size*kernel_size, kernel_size=3, padding=1, stride=stride)
         nn.init.constant_(self.p_conv.weight, 0)
         self.p_conv.register_backward_hook(self._set_lr)
@@ -31,7 +31,14 @@ class DeformConv2d(nn.Module):
             self.m_conv = nn.Conv2d(inc, kernel_size*kernel_size, kernel_size=3, padding=1, stride=stride)
             nn.init.constant_(self.m_conv.weight, 0)
             self.m_conv.register_backward_hook(self._set_lr)
-        
+    
+    def _init_conv_kaiming(self, module):
+        if isinstance(module, nn.Conv2d):
+            nn.init.kaiming_uniform_(module.weight, a=1)
+
+            if module.bias is not None:
+                nn.init.constant_(module.bias, 0)
+
     @staticmethod
     def _set_lr(module, grad_input, grad_output):
         grad_input = (grad_input[i] * 0.1 for i in range(len(grad_input)))

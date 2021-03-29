@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch
 import math
 from .asff import ASFF
+from .deform_conv_v2 import DeformConv2d
+
 
 class ScaleExp(nn.Module):
     def __init__(self,init_value=1.0):
@@ -13,7 +15,7 @@ class ScaleExp(nn.Module):
         return torch.exp(x*self.scale)
 
 class ClsCntRegHead(nn.Module):
-    def __init__(self,in_channel,class_num,GN=True,cnt_on_reg=True,prior=0.01,use_asff=False):
+    def __init__(self,in_channel,class_num,GN=True,cnt_on_reg=True,prior=0.01,use_asff=False, use_dcn=False):
         '''
         Args  
         in_channel  
@@ -26,13 +28,17 @@ class ClsCntRegHead(nn.Module):
         self.class_num=class_num
         self.cnt_on_reg=cnt_on_reg
         self.use_asff = use_asff
+        self.use_dcn = use_dcn
 
         cls_branch=[]
         reg_branch=[]
 
         for i in range(4):
-            # 网络层数增加，这增加了网络的非线性表达能力同时不过多增加网络参数 
-            cls_branch.append(nn.Conv2d(in_channel,in_channel,kernel_size=3,padding=1,bias=True))
+            # 网络层数增加，这增加了网络的非线性表达能力同时不过多增加网络参数
+            if self.use_dcn:
+                cls_branch.append(DeformConv2d(in_channel, in_channel, kernel_size=3, padding=1, bias=None))
+            else: 
+                cls_branch.append(nn.Conv2d(in_channel,in_channel,kernel_size=3,padding=1,bias=True))
             # BN 需要用到足够大的批大小（例如，每个工作站采用 32 的批量大小）。
             # 一个小批量会导致估算批统计不准确，减小 BN 的批大小会极大地增加模型错误率。
             # 将channel方向分group，然后每个group内做归一化，算(C//G)*H*W的均值， 
@@ -41,7 +47,10 @@ class ClsCntRegHead(nn.Module):
                 cls_branch.append(nn.GroupNorm(32,in_channel))
             cls_branch.append(nn.ReLU(True))
 
-            reg_branch.append(nn.Conv2d(in_channel,in_channel,kernel_size=3,padding=1,bias=True))
+            if self.use_dcn:
+                reg_branch.append(DeformConv2d(in_channel, in_channel, kernel_size=3, padding=1, bias=None))
+            else:
+                reg_branch.append(nn.Conv2d(in_channel,in_channel,kernel_size=3,padding=1,bias=True))
             if GN:
                 reg_branch.append(nn.GroupNorm(32,in_channel))
             reg_branch.append(nn.ReLU(True))
