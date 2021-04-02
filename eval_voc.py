@@ -130,6 +130,11 @@ if __name__=="__main__":
     resize_size = [400, 667]
     resize_size = [800, 1333]
     resize_size = [800, 1200]
+    resize_size = [512, 512]
+    resize_size = [608, 608]
+    resize_size = [640, 640]
+    resize_size = [720, 920]
+    resize_size = [720, 1024]
     eval_dataset = VOCDataset(root_dir='./data/VOCdevkit/VOC2007', resize_size=resize_size,
                                split='test', use_difficult=False, is_train=False, augment=None)
     print("INFO===>eval dataset has %d imgs"%len(eval_dataset))
@@ -144,11 +149,16 @@ if __name__=="__main__":
     model_path = './checkpoint/use_asff/model_8_800_1200_60.pth'
     model_path = './checkpoint/simo/model_8_800_1200_45.pth'
     model_path = './checkpoint/simo_asff/model_8_800_1200_50.pth'
+    model_path = './checkpoint/effi_lite_simo/model_8_512_512_45.pth'
+    model_path = './checkpoint/effi_lite_mimo/model_8_512_512_41.pth'
+    model_path = './checkpoint/effi_lite_mimo/model_8_608_608_45.pth'
+    model_path = './checkpoint/effi_lite_mimo/model_8_640_640_60.pth'
+    model_path = './checkpoint/simo_dcn/model_8_720_920_50.pth'
 #     model_path = './checkpoint/voc_77.8.pth'
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     # model=convertSyncBNtoBN(model)
     # print("INFO===>success convert SyncBN to BN")
-    model=model.cuda().eval()
+    model = model.cuda().eval()
     print("===>success loading model")
 
     gt_boxes=[]

@@ -1,6 +1,7 @@
 
 from .resnet import resnet50, resnet101, resnet152
 from .efficientnet_lite import EfficientNetLite
+from .efficientnet import EfficientNet
 
 
 def build_backbone(backbone_name, pretrained, out_stages=(2, 4, 6)):
@@ -12,5 +13,7 @@ def build_backbone(backbone_name, pretrained, out_stages=(2, 4, 6)):
         return resnet152(pretrained=pretrained, if_include_top=False)
     elif backbone_name in ('efficientnet_lite0', 'efficientnet_lite1', 'efficientnet_lite2', 'efficientnet_lite3', 'efficientnet_lite4'):
         return EfficientNetLite(backbone_name, out_stages=out_stages)
+    elif backbone_name in (('efficientnet-b%s' % i) for i in range(0, 8)):
+        return EfficientNet(backbone_name, pretrained)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(backbone_name)

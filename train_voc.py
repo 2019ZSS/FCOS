@@ -25,10 +25,12 @@ cudnn.deterministic = True
 random.seed(0)
 transform = Transforms()
 # [800, 1333]
-# resize_size=[800,1200]
-resize_size=[512,512]
+resize_size=[800,1200]
+# resize_size=[512,512]
+resize_size=[640, 640]
+resize_size=[720, 1024]
 train_dataset = VOCDataset(root_dir='./data/VOCdevkit/VOC2007',resize_size=resize_size,
-                           split='trainval',use_difficult=False,is_train=True,augment=transform)
+                            split='trainval',use_difficult=False,is_train=True,augment=transform)
 
 model = FCOSDetector(mode="training").cuda()
 model = torch.nn.DataParallel(model)
@@ -39,8 +41,8 @@ BATCH_SIZE = opt.batch_size
 EPOCHS = opt.epochs
 #WARMPUP_STEPS_RATIO = 0.12
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,
-                                           collate_fn=train_dataset.collate_fn,
-                                           num_workers=opt.n_cpu, worker_init_fn=np.random.seed(0))
+                                            collate_fn=train_dataset.collate_fn,
+                                            num_workers=opt.n_cpu, worker_init_fn=np.random.seed(0))
 print("total_images : {}".format(len(train_dataset)))
 steps_per_epoch = len(train_dataset) // BATCH_SIZE
 TOTAL_STEPS = steps_per_epoch * EPOCHS
@@ -48,10 +50,11 @@ WARMPUP_STEPS = 501
 
 GLOBAL_STEPS = 1
 LR_INIT = 2e-3
-# LR_INIT = 1e-2
+LR_INIT = 2e-3
 LR_END = 2e-5
 # LR_END = 2e-2
-optimizer = torch.optim.SGD(model.parameters(),lr = LR_INIT, momentum=0.9, weight_decay = 0.0001)
+optimizer = torch.optim.SGD(model.parameters(),lr=LR_INIT, momentum=0.9, weight_decay=0.0001)
+# optimizer = torch.optim.Adam(model.parameters(), lr=LR_INIT, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-4, amsgrad=False)
 
 # def lr_func():
 #      if GLOBAL_STEPS < WARMPUP_STEPS:
@@ -75,17 +78,22 @@ for epoch in range(EPOCHS):
 
         #lr = lr_func()
         if GLOBAL_STEPS < WARMPUP_STEPS:
-           lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
-           for param in optimizer.param_groups:
-               param['lr'] = lr
+            lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
+            for param in optimizer.param_groups:
+                param['lr'] = lr
         if GLOBAL_STEPS == 20001:
-           lr = LR_INIT * 0.1
-           for param in optimizer.param_groups:
-               param['lr'] = lr
+            lr = LR_INIT * 0.1
+            for param in optimizer.param_groups:
+                param['lr'] = lr
         if GLOBAL_STEPS == 27001:
-           lr = LR_INIT * 0.01
-           for param in optimizer.param_groups:
-              param['lr'] = lr
+            lr = LR_INIT * 0.01
+            for param in optimizer.param_groups:
+                param['lr'] = lr
+#         lr = 0
+#         for param in optimizer.param_groups:
+#             lr += param['lr']
+#         lr = lr / len(optimizer.param_groups)
+        
         start_time = time.time()
 
         optimizer.zero_grad()
@@ -99,11 +107,11 @@ for epoch in range(EPOCHS):
         print(
             "global_steps:%d epoch:%d steps:%d/%d cls_loss:%.4f cnt_loss:%.4f reg_loss:%.4f cost_time:%dms lr=%.4e total_loss:%.4f" % \
             (GLOBAL_STEPS, epoch + 1, epoch_step + 1, steps_per_epoch, losses[0].mean(), losses[1].mean(),
-             losses[2].mean(), cost_time, lr, loss.mean()))
+            losses[2].mean(), cost_time, lr, loss.mean()))
 
         GLOBAL_STEPS += 1
 
-    torch.save(model.state_dict(), "./checkpoint/simo_asff/model_{}_{}_{}_{}.pth".format(BATCH_SIZE, resize_size[0],resize_size[1], epoch + 1))
+    torch.save(model.state_dict(), "./checkpoint/simo_dcn/model_{}_{}_{}_{}.pth".format(BATCH_SIZE, resize_size[0],resize_size[1], epoch + 1))
 
 
 

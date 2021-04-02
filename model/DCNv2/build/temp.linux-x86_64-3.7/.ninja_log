@@ -1,0 +1,3 @@
+# ninja log v5
+0	1068	1617352130810758201	/home/stu/zss/FCOS-PyTorch-37.2AP/DCNv2-Pytorch-TensorRT7/pytorchExtension/build/temp.linux-x86_64-3.7/src/dcn_v2_im2col_cuda.o	c0f1af9df2ba01b1
+0	21980	1617352151715301897	/home/stu/zss/FCOS-PyTorch-37.2AP/DCNv2-Pytorch-TensorRT7/pytorchExtension/build/temp.linux-x86_64-3.7/src/dcn_v2_cuda.o	35d5e88ffe974c75

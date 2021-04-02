@@ -2,22 +2,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from .encoder import DilatedEncoder
+from .deform_conv_v2 import DeformConv2d
+from .DCNv2 import DeformableConv2DLayer
 
 
 class FPN(nn.Module):
     '''only for resnet50,101,152'''
-    def __init__(self,features=256,use_p5=True):
+    def __init__(self,backbone_in_channels=[512, 1024, 2048], features=256,use_p5=True):
         super(FPN,self).__init__()
-        self.prj_5 = nn.Conv2d(2048, features, kernel_size=1) # 降维，方便后面特征融合
-        self.prj_4 = nn.Conv2d(1024, features, kernel_size=1)
-        self.prj_3 = nn.Conv2d(512, features, kernel_size=1)
+        self.prj_5 = nn.Conv2d(backbone_in_channels[2], features, kernel_size=1) # 降维，方便后面特征融合
+        self.prj_4 = nn.Conv2d(backbone_in_channels[1], features, kernel_size=1)
+        self.prj_3 = nn.Conv2d(backbone_in_channels[0], features, kernel_size=1)
         self.conv_5 = nn.Conv2d(features, features, kernel_size=3, padding=1)
         self.conv_4 = nn.Conv2d(features, features, kernel_size=3, padding=1)
         self.conv_3 = nn.Conv2d(features, features, kernel_size=3, padding=1)
         if use_p5:
             self.conv_out6 = nn.Conv2d(features, features, kernel_size=3, padding=1, stride=2)
         else:
-            self.conv_out6 = nn.Conv2d(2048, features, kernel_size=3, padding=1, stride=2)
+            self.conv_out6 = nn.Conv2d(backbone_in_channels[-1], features, kernel_size=3, padding=1, stride=2)
         self.conv_out7 = nn.Conv2d(features, features, kernel_size=3, padding=1, stride=2)
         self.use_p5=use_p5
         self.apply(self.init_conv_kaiming)
@@ -60,6 +62,9 @@ class SIMO(nn.Module):
         # in_channels_list = [512, 1024, 2048]
         # assert backbone_level_used >= 0 and backbone_level_used <= len(in_channels_list)
         # encoder_cfg.in_channels = in_channels_list[backbone_level_used]
+        self.use_dcn = encoder_cfg.use_dcn
+        if self.use_dcn:
+            self.dcn_conv = DeformableConv2DLayer(encoder_cfg.in_channels, encoder_cfg.in_channels, kernel_size=3)
         encoder_cfg.encoder_channels = features
         self.backbone_level_used = backbone_level_used
         self.encoder = nn.Sequential(DilatedEncoder(encoder_cfg))
@@ -80,7 +85,8 @@ class SIMO(nn.Module):
     def forward(self, x):
         
         C = x[-1]
-
+        if self.use_dcn:
+            C = self.dcn_conv(C)
         P5 = self.encoder(C)
         P4 = F.interpolate(P5, scale_factor=2, mode='nearest')
         P3 = F.interpolate(P4, scale_factor=2, mode='nearest')

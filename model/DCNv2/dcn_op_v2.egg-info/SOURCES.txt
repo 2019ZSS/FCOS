@@ -1,0 +1,8 @@
+README.md
+setup.py
+dcn_op_v2.egg-info/PKG-INFO
+dcn_op_v2.egg-info/SOURCES.txt
+dcn_op_v2.egg-info/dependency_links.txt
+dcn_op_v2.egg-info/top_level.txt
+src/dcn_v2_cuda.cc
+src/dcn_v2_im2col_cuda.cu

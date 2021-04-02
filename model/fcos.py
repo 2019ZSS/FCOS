@@ -13,18 +13,20 @@ class FCOS(nn.Module):
     def __init__(self,config=None):
         super().__init__()
         if config is None:
-            config=DefaultConfig
+            config = DefaultConfig
         self.backbone = build_backbone(config.backbone_name, config.pretrained, config.out_stages)
         if config.use_simo:
-            self.fpn=SIMO(encoder_cfg=config.encoder_cfg, 
+            self.fpn = SIMO(encoder_cfg=config.encoder_cfg, 
                             backbone_level_used=config.backbone_level_used,
                             features=config.fpn_out_channels)
         else:
-            self.fpn=FPN(config.fpn_out_channels,use_p5=config.use_p5)
-        self.head=ClsCntRegHead(config.fpn_out_channels,config.class_num,
+            self.fpn = FPN(config.backbone_in_channls, 
+                            config.fpn_out_channels,
+                            use_p5=config.use_p5)
+        self.head = ClsCntRegHead(config.fpn_out_channels,config.class_num,
                                 config.use_GN_head,config.cnt_on_reg,config.prior, 
                                 config.use_asff, config.use_dcn)
-        self.config=config
+        self.config = config
 
     def train(self,mode=True):
         '''
@@ -58,6 +60,7 @@ class FCOS(nn.Module):
         cls_logits,cnt_logits,reg_preds = self.head(all_P)
         return [cls_logits,cnt_logits,reg_preds]
 
+
 class DetectHead(nn.Module):
     def __init__(self,score_threshold,nms_iou_threshold,max_detection_boxes_num,strides,config=None):
         super().__init__()
@@ -83,7 +86,7 @@ class DetectHead(nn.Module):
         cls_preds=cls_logits.sigmoid_()
         cnt_preds=cnt_logits.sigmoid_()
 
-        coords =coords.cuda() if torch.cuda.is_available() else coords
+        coords = coords.cuda() if torch.cuda.is_available() else coords
         
         # tensor -> value,  tensor -> index
         cls_scores,cls_classes=torch.max(cls_preds,dim=-1)#[batch_size,sum(_h*_w)]
@@ -216,6 +219,7 @@ class DetectHead(nn.Module):
             out.append(pred)
             coords.append(coord)
         return torch.cat(out,dim=1),torch.cat(coords,dim=0)
+
 
 class ClipBoxes(nn.Module):
     def __init__(self):

@@ -8,7 +8,7 @@ def coords_fmap2orig(feature,stride):
     '''
     transfor one fmap coords to orig coords
     Args
-    featurn [batch_size,h,w,c]
+    feature [batch_size,h,w,c]
     stride int
     Returns 
     coords [n,2]
@@ -24,6 +24,7 @@ def coords_fmap2orig(feature,stride):
     shift_y = torch.reshape(shift_y, [-1])
     coords = torch.stack([shift_x, shift_y], -1) + stride // 2
     return coords
+
 
 class GenTargets(nn.Module):
     def __init__(self,strides,limit_range):
@@ -150,13 +151,12 @@ class GenTargets(nn.Module):
         # assert num_pos.shape==(batch_size,)
         mask_pos_2=mask_pos_2>=1
         assert mask_pos_2.shape==(batch_size,h_mul_w)
-        cls_targets[~mask_pos_2]=0#[batch_size,h*w,1] 负样本
+        cls_targets[~mask_pos_2]=0 #[batch_size,h*w,1] 负样本
         cnt_targets[~mask_pos_2]=-1
         reg_targets[~mask_pos_2]=-1
         
         return cls_targets,cnt_targets,reg_targets
         
-
 
 def compute_cls_loss(preds,targets,mask):
     '''
