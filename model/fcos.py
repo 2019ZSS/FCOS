@@ -18,14 +18,16 @@ class FCOS(nn.Module):
         if config.use_simo:
             self.fpn = SIMO(encoder_cfg=config.encoder_cfg, 
                             backbone_level_used=config.backbone_level_used,
-                            features=config.fpn_out_channels)
+                            features=config.fpn_out_channels,
+                            use_dcn_out=config.use_dcn_out)
         else:
             self.fpn = FPN(config.backbone_in_channls, 
                             config.fpn_out_channels,
                             use_p5=config.use_p5)
-        self.head = ClsCntRegHead(config.fpn_out_channels,config.class_num,
-                                config.use_GN_head,config.cnt_on_reg,config.prior, 
-                                config.use_asff, config.use_dcn)
+        self.head = ClsCntRegHead(in_channel=config.fpn_out_channels, class_num=config.class_num,
+                                    GN=config.use_GN_head, cnt_on_reg=config.cnt_on_reg, prior=config.prior, 
+                                    use_asff=config.use_asff, use_dcn=config.use_dcn, 
+                                    use_3d_maxf=config.use_3d_maxf)
         self.config = config
 
     def train(self,mode=True):
@@ -62,6 +64,7 @@ class FCOS(nn.Module):
 
 
 class DetectHead(nn.Module):
+
     def __init__(self,score_threshold,nms_iou_threshold,max_detection_boxes_num,strides,config=None):
         super().__init__()
         self.score_threshold=score_threshold
@@ -72,6 +75,7 @@ class DetectHead(nn.Module):
             self.config=DefaultConfig
         else:
             self.config=config
+
     def forward(self,inputs):
         '''
         inputs  list [cls_logits,cnt_logits,reg_preds]  
@@ -240,7 +244,9 @@ class FCOSDetector(nn.Module):
         self.mode=mode
         self.fcos_body=FCOS(config=config)
         if mode=="training":
-            self.target_layer=GenTargets(strides=config.strides,limit_range=config.limit_range)
+            self.target_layer=GenTargets(strides=config.strides,
+                                        limit_range=config.limit_range, 
+                                        is_generate_weight=config.is_generate_weight)
             self.loss_layer=LOSS()
         elif mode=="inference":
             self.detection_head=DetectHead(config.score_threshold,config.nms_iou_threshold,

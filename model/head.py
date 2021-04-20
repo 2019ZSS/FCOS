@@ -3,8 +3,13 @@ from torch._C import device
 import torch.nn as nn
 import torch
 import math
+import torch.nn.functional as F 
 from .asff import ASFF
-from .deform_conv_v2 import DeformConv2d
+try:
+    from .DCNv2 import DeformableConv2DLayer as DeformConv2d
+except Exception as e:
+    print(e)
+    from .deform_conv_v2 import DeformConv2d
 
 
 class ScaleExp(nn.Module):
@@ -15,7 +20,7 @@ class ScaleExp(nn.Module):
         return torch.exp(x*self.scale)
 
 class ClsCntRegHead(nn.Module):
-    def __init__(self,in_channel,class_num,GN=True,cnt_on_reg=True,prior=0.01,use_asff=False, use_dcn=False):
+    def __init__(self,in_channel,class_num,GN=True,cnt_on_reg=True,prior=0.01,use_asff=False, use_dcn=False, use_3d_maxf=False):
         '''
         Args  
         in_channel  
@@ -29,6 +34,7 @@ class ClsCntRegHead(nn.Module):
         self.cnt_on_reg=cnt_on_reg
         self.use_asff = use_asff
         self.use_dcn = use_dcn
+        self.use_3d_maxf = use_3d_maxf
 
         cls_branch=[]
         reg_branch=[]
@@ -58,6 +64,9 @@ class ClsCntRegHead(nn.Module):
         if self.use_asff:
             self.asffs = nn.ModuleList([ASFF(2 - i) for i in range(3)])
 
+        if self.use_3d_maxf:
+            self.maxf = MaxFiltering(in_channel, kernel_size=3, tau=2)
+
         self.cls_conv = nn.Sequential(*cls_branch)
         self.reg_conv = nn.Sequential(*reg_branch)
 
@@ -79,6 +88,8 @@ class ClsCntRegHead(nn.Module):
     
     def forward(self,inputs):
         '''inputs:[P3~P7]'''
+        if self.use_3d_maxf:
+            inputs = self.maxf(inputs)
         cls_logits=[]
         cnt_logits=[]
         reg_preds=[]
@@ -100,5 +111,41 @@ class ClsCntRegHead(nn.Module):
         return cls_logits,cnt_logits,reg_preds
 
 
+class MaxFiltering(nn.Module):
 
+    def __init__(self, in_channels: int, kernel_size: int = 3, tau: int = 2):
+        super().__init__()
+        # self.conv = nn.Conv2d(
+        #     in_channels,
+        #     in_channels,
+        #     kernel_size=3,
+        #     stride=1,
+        #     padding=1
+        # )
+        self.norm = nn.GroupNorm(32, in_channels)
+        self.nonlinear = nn.ReLU()
+        self.max_pool = nn.MaxPool3d(
+            kernel_size=(tau + 1, kernel_size, kernel_size),
+            padding=(tau // 2, kernel_size // 2, kernel_size // 2),
+            stride=1
+        )
+        self.margin = tau // 2
+
+    def forward(self, inputs):
+        # features = []
+        # for _, x in enumerate(inputs):
+        #     features.append(self.conv(x))
+
+        features = inputs
+        outputs = []
+        for l, x in enumerate(features):
+            func = lambda f: F.interpolate(f, size=x.shape[2:], mode="bilinear")
+            feature_3d = []
+            for k in range(max(0, l - self.margin), min(len(features), l + self.margin + 1)):
+                feature_3d.append(func(features[k]) if k != l else features[k])
+            feature_3d = torch.stack(feature_3d, dim=2)
+            max_pool = self.max_pool(feature_3d)[:, :, min(l, self.margin)]
+            output = max_pool + inputs[l]
+            outputs.append(self.nonlinear(self.norm(output)))
+        return outputs
         

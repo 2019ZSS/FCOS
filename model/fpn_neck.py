@@ -2,8 +2,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from .encoder import DilatedEncoder
-from .deform_conv_v2 import DeformConv2d
-from .DCNv2 import DeformableConv2DLayer
+try:
+    from .DCNv2 import DeformableConv2DLayer as DeformConv2d
+except Exception as e:
+    print(e)
+    from .deform_conv_v2 import DeformConv2d
+from .IRNN.irnn import IRCNN
 
 
 class FPN(nn.Module):
@@ -57,22 +61,34 @@ class FPN(nn.Module):
 
 class SIMO(nn.Module):
 
-    def __init__(self, encoder_cfg, backbone_level_used=2, features=256):
+    def __init__(self, encoder_cfg, backbone_level_used=2, features=256, use_dcn_out=False, use_ircnn=False):
         super(SIMO, self).__init__()
         # in_channels_list = [512, 1024, 2048]
         # assert backbone_level_used >= 0 and backbone_level_used <= len(in_channels_list)
         # encoder_cfg.in_channels = in_channels_list[backbone_level_used]
         self.use_dcn = encoder_cfg.use_dcn
         if self.use_dcn:
-            self.dcn_conv = DeformableConv2DLayer(encoder_cfg.in_channels, encoder_cfg.in_channels, kernel_size=3)
+            self.dcn_conv = DeformConv2d(encoder_cfg.in_channels, encoder_cfg.in_channels, kernel_size=3, padding=1)
         encoder_cfg.encoder_channels = features
         self.backbone_level_used = backbone_level_used
         self.encoder = nn.Sequential(DilatedEncoder(encoder_cfg))
+        self.use_dcn_out = use_dcn_out
+        self.use_ircnn = use_ircnn
 
-        self.conv_3 = nn.Conv2d(features, features, kernel_size=3, padding=1)
-        self.conv_4 = nn.Conv2d(features, features, kernel_size=3, padding=1)
-        self.conv_out6 = nn.Conv2d(features, features, kernel_size=3, padding=1, stride=2)
-        self.conv_out7 = nn.Conv2d(features, features, kernel_size=3, padding=1, stride=2)
+        if self.use_dcn_out:
+            self.conv_3 = DeformConv2d(features, features, kernel_size=3, padding=1)
+            self.conv_4 = DeformConv2d(features, features, kernel_size=3, padding=1)
+            self.conv_out6 = DeformConv2d(features, features, kernel_size=3, padding=1, stride=2)
+            self.conv_out7 = DeformConv2d(features, features, kernel_size=3, padding=1, stride=2)
+        else:
+            self.conv_3 = nn.Conv2d(features, features, kernel_size=3, padding=1)
+            self.conv_4 = nn.Conv2d(features, features, kernel_size=3, padding=1)
+            self.conv_out6 = nn.Conv2d(features, features, kernel_size=3, padding=1, stride=2)
+            self.conv_out7 = nn.Conv2d(features, features, kernel_size=3, padding=1, stride=2)
+
+        if self.use_ircnn:
+            self.ircnn = IRCNN(features, features)
+
         self.apply(self.init_conv_kaiming)
 
     def init_conv_kaiming(self, module):
@@ -87,7 +103,13 @@ class SIMO(nn.Module):
         C = x[-1]
         if self.use_dcn:
             C = self.dcn_conv(C)
+
         P5 = self.encoder(C)
+
+        if self.use_ircnn:
+            context = self.ircnn(P5)
+            P5 = context + P5
+
         P4 = F.interpolate(P5, scale_factor=2, mode='nearest')
         P3 = F.interpolate(P4, scale_factor=2, mode='nearest')
         

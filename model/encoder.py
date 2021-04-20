@@ -4,6 +4,11 @@ import torch
 import torch.nn as nn
 
 from .utils import (get_norm, get_activation, c2_xavier_fill)
+try:
+    from .DCNv2 import DeformableConv2DLayer as DeformConv2d
+except Exception as e:
+    print(e)
+    from .deform_conv_v2 import DeformConv2d
 
 
 class DilatedEncoder(nn.Module):
@@ -24,6 +29,7 @@ class DilatedEncoder(nn.Module):
         self.block_dilations = cfg.block_dilations
         self.norm_type = cfg.norm_type
         self.act_type = cfg.act_type
+        self.conv_type = cfg.conv_type
 
         assert len(self.block_dilations) == self.num_residual_blocks
 
@@ -49,7 +55,8 @@ class DilatedEncoder(nn.Module):
                     self.block_mid_channels,
                     dilation=dilation,
                     norm_type=self.norm_type,
-                    act_type=self.act_type
+                    act_type=self.act_type,
+                    conv_type=self.conv_type,
                 )
             )
         self.dilated_encoder_blocks = nn.Sequential(*encoder_blocks)
@@ -75,6 +82,7 @@ class DilatedEncoder(nn.Module):
         out = self.fpn_norm(self.fpn_conv(out))
         return self.dilated_encoder_blocks(out)
 
+
 class Bottleneck(nn.Module):
 
     def __init__(self,
@@ -82,18 +90,28 @@ class Bottleneck(nn.Module):
                 mid_channels: int = 128,
                 dilation: int = 1,
                 norm_type: str = 'BN',
-                act_type: str = 'ReLU'):
+                act_type: str = 'ReLU',
+                conv_type: str = 'CNN'):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, mid_channels, kernel_size=1, padding=0),
             get_norm(norm_type, mid_channels),
             get_activation(act_type)
         )
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=dilation, dilation=dilation),
-            get_norm(norm_type, mid_channels),
-            get_activation(act_type)
-        )
+        if conv_type == 'CNN':
+            self.conv2 = nn.Sequential(
+                nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=dilation, dilation=dilation),
+                get_norm(norm_type, mid_channels),
+                get_activation(act_type)
+            )
+        elif conv_type == 'DCN':
+            self.conv2 = nn.Sequential(
+                DeformConv2d(mid_channels, mid_channels, kernel_size=3, padding=dilation, dilation=dilation),
+                get_norm(norm_type, mid_channels),
+                get_activation(act_type)
+            )
+        else:
+            return NotImplementedError(conv_type)
         self.conv3 = nn.Sequential(
             nn.Conv2d(mid_channels, in_channels, kernel_size=1, padding=0),
             get_norm(norm_type, in_channels),

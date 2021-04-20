@@ -2,12 +2,14 @@ import torch
 import numpy as np
 import cv2
 
+
 def sort_by_score(pred_boxes, pred_labels, pred_scores):
     score_seq = [(-score).argsort() for index, score in enumerate(pred_scores)]
     pred_boxes = [sample_boxes[mask] for sample_boxes, mask in zip(pred_boxes, score_seq)]
     pred_labels = [sample_boxes[mask] for sample_boxes, mask in zip(pred_labels, score_seq)]
     pred_scores = [sample_boxes[mask] for sample_boxes, mask in zip(pred_scores, score_seq)]
     return pred_boxes, pred_labels, pred_scores
+
 
 def iou_2d(cubes_a, cubes_b):
     """
@@ -34,6 +36,7 @@ def iou_2d(cubes_a, cubes_b):
     iou = overlap / (area_a + area_b - overlap)
     return iou
 
+
 def _compute_ap(recall, precision):
     """ Compute the average precision, given the recall and precision curves.
     Code originally from https://github.com/rbgirshick/py-faster-rcnn.
@@ -59,6 +62,7 @@ def _compute_ap(recall, precision):
     # and sum (\Delta recall) * prec
     ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     return ap
+
 
 def eval_ap_2d(gt_boxes, gt_labels, pred_boxes, pred_labels, pred_scores, iou_thread, num_cls):
     """
@@ -122,9 +126,9 @@ def eval_ap_2d(gt_boxes, gt_labels, pred_boxes, pred_labels, pred_scores, iou_th
         # print(recall, precision)
     return all_ap
 
+
 if __name__=="__main__":
     from model.fcos import FCOSDetector
-#     from demo import convertSyncBNtoBN
     from dataset.VOC_dataset import VOCDataset
     
     resize_size = [400, 667]
@@ -153,7 +157,12 @@ if __name__=="__main__":
     model_path = './checkpoint/effi_lite_mimo/model_8_512_512_41.pth'
     model_path = './checkpoint/effi_lite_mimo/model_8_608_608_45.pth'
     model_path = './checkpoint/effi_lite_mimo/model_8_640_640_60.pth'
-    model_path = './checkpoint/simo_dcn/model_8_720_920_50.pth'
+    model_path = './checkpoint/simo_dcn/model_8_720_1024_50.pth'
+    model_path = './checkpoint/simo_fpn_dcn/model_8_720_1024_50.pth'
+    model_path = './checkpoint/simo_fpn_dcn_focal/model_8_720_1024_45.pth'
+    model_path = './checkpoint/dcn_simo/model_8_720_1024_60.pth'
+    model_path = './checkpoint/simo_3d_maxf/model_8_720_1024_45.pth'
+#     model_path = './checkpoint/simo_ircnn/model_8_720_1024_45.pth'
 #     model_path = './checkpoint/voc_77.8.pth'
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     # model=convertSyncBNtoBN(model)
@@ -186,6 +195,6 @@ if __name__=="__main__":
     mAP=0.
     for class_id,class_mAP in all_AP.items():
         mAP+=float(class_mAP)
-    mAP/=(len(eval_dataset.CLASSES_NAME)-1)
+    mAP /= (len(eval_dataset.CLASSES_NAME)-1)
     print("mAP=====>%.3f\n"%mAP)
 

@@ -1,5 +1,5 @@
 class DilatedEncoderConfig(object):
-        use_dcn = True
+        use_dcn = False
         in_channels = 2048
         encoder_channels = 256
         block_mid_channels = 128
@@ -7,6 +7,17 @@ class DilatedEncoderConfig(object):
         block_dilations = [1, 2, 5, 1]
         norm_type = 'BN'
         act_type = 'ReLU'
+        conv_type = 'CNN'
+
+
+class TransformerConfig(object):
+        cls_prediction_min = -2.0
+        cls_prediction_max = 2.0
+        reg_prediction_min = -2.0
+        reg_prediction_max = 2.0
+        uncertainty_cls_weight = 0.5
+        uncertainty_reg_weight = 0.5
+        uncertainty_embedding_dim = 64
 
 
 class DefaultConfig():
@@ -22,6 +33,8 @@ class DefaultConfig():
         fpn_out_channels=256
         use_p5=True
         use_simo=True
+        use_dcn_out=False
+        use_ircnn=False
         encoder_cfg = DilatedEncoderConfig()
         backbone_level_used = 2
 
@@ -33,9 +46,15 @@ class DefaultConfig():
         cnt_on_reg=True
         use_asff=False
         use_dcn=False
+        use_3d_maxf=False 
+
         #training
         strides=[8,16,32,64,128]
         limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]]
+        is_generate_weight=False
+        cnt_loss_mode='bce'
+        reg_loss_mode='giou'
+        # transformer_cfg=TransformerConfig()
 
         #inference
         score_threshold=0.05
