@@ -16,6 +16,7 @@ parser.add_argument("--height", type=int, default=800, help="height of each imag
 parser.add_argument("--width", type=int, default=1333, help="width of each image")
 parser.add_argument("--n_cpu", type=int, default=4, help="number of cpu threads to use during batch generation")
 parser.add_argument("--n_gpu", type=str, default='0,1', help="number of cpu threads to use during batch generation")
+parser.add_argument("--LR_INIT", type=float, default=1e-3, help="init learing rate")
 parser.add_argument("--interval", type=int, default=5, help="How long to save the model")
 parser.add_argument("--resume", type=bool, default=False, help="whether or Continue to train the model")
 parser.add_argument("--resumed_path", type=str, default='', help="resmued trained path")
@@ -58,7 +59,7 @@ WARMPUP_STEPS = 501
 WARMUP_FACTOR = 1.0 / 3.0
 
 GLOBAL_STEPS = 1
-LR_INIT = 2e-3
+LR_INIT = opt.LR_INIT
 LR_END = 2e-5
 optimizer = torch.optim.SGD(model.parameters(),lr=LR_INIT, momentum=0.9, weight_decay=0.0001)
 # optimizer = torch.optim.Adam(model.parameters(), lr=LR_INIT, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-4, amsgrad=False)
