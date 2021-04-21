@@ -131,14 +131,15 @@ if __name__=="__main__":
     from model.fcos import FCOSDetector
     from dataset.VOC_dataset import VOCDataset
     
-    resize_size = [400, 667]
-    resize_size = [800, 1333]
-    resize_size = [800, 1200]
-    resize_size = [512, 512]
-    resize_size = [608, 608]
-    resize_size = [640, 640]
-    resize_size = [720, 920]
-    resize_size = [720, 1024]
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--height", type=int, default=800, help="height of each image")
+    parser.add_argument("--width", type=int, default=1333, help="width of each image")
+    parser.add_argument("--checkpoint", type=str, default='', help='checkpoint model')
+    
+    opt = parser.parse_args()
+    resize_size = [opt.height, opt.width]
     eval_dataset = VOCDataset(root_dir='./data/VOCdevkit/VOC2007', resize_size=resize_size,
                                split='test', use_difficult=False, is_train=False, augment=None)
     print("INFO===>eval dataset has %d imgs"%len(eval_dataset))
@@ -162,6 +163,8 @@ if __name__=="__main__":
     model_path = './checkpoint/simo_fpn_dcn_focal/model_8_720_1024_45.pth'
     model_path = './checkpoint/dcn_simo/model_8_720_1024_60.pth'
     model_path = './checkpoint/simo_3d_maxf/model_8_720_1024_45.pth'
+    if not opt.checkpoint:
+        model_path = opt.checkpoint
 #     model_path = './checkpoint/simo_ircnn/model_8_720_1024_45.pth'
 #     model_path = './checkpoint/voc_77.8.pth'
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
