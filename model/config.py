@@ -20,6 +20,29 @@ class TransformerConfig(object):
         uncertainty_embedding_dim = 64
 
 
+class QFLConfig(object):
+        name = 'QualityFocalLoss'
+        use_sigmoid = True
+        beta = 2.0
+        loss_weight = 1.0
+
+
+class DFConfig(object):
+        name = 'DistributionFocalLoss'
+        loss_weight = 0.25
+
+
+class GIOUConfig(object):
+        loss_weight = 2.0
+
+
+class GFLConfig(object):
+        reg_max = 8
+        loss_qfl = QFLConfig()
+        loss_dfl = DFConfig()
+        loss_bbox = GIOUConfig()
+
+
 class DefaultConfig():
         #backbone
         backbone_name='resnet50'
@@ -46,7 +69,9 @@ class DefaultConfig():
         cnt_on_reg=True
         use_asff=False
         use_dcn=False
-        use_3d_maxf=False 
+        use_3d_maxf=False
+        use_gl=False
+        gl_cfg=GFLConfig()
 
         #training
         strides=[8,16,32,64,128]

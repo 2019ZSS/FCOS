@@ -163,7 +163,7 @@ if __name__=="__main__":
     model_path = './checkpoint/simo_fpn_dcn_focal/model_8_720_1024_45.pth'
     model_path = './checkpoint/dcn_simo/model_8_720_1024_60.pth'
     model_path = './checkpoint/simo_3d_maxf/model_8_720_1024_45.pth'
-    if not opt.checkpoint:
+    if opt.checkpoint:
         model_path = opt.checkpoint
 #     model_path = './checkpoint/simo_ircnn/model_8_720_1024_45.pth'
 #     model_path = './checkpoint/voc_77.8.pth'

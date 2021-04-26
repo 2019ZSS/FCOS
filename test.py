@@ -296,9 +296,9 @@ if __name__ == "__main__":
     # print(bbox_weight.shape, y[:, :, 1:2].shape)
     # print((bbox_weight * y[:, :, 1:2]).shape)
     
-    from model.loss import compute_cls_loss, compute_reg_loss, GenTargets
-    level = 5
-    h, w = (8, 8)
+    # from model.loss import compute_cls_loss, compute_reg_loss, GenTargets
+    # level = 5
+    # h, w = (8, 8)
     # preds = (torch.rand((level, 4, 20, h, w)) * 21).long()
     # targets = torch.rand((4, level * h * w, 1)) * 21
     # mask = torch.rand((4, level * h * w)) * 21
@@ -333,3 +333,40 @@ if __name__ == "__main__":
     #     print(y.shape) 
     # zero = torch.zeros(output[0].shape, dtype=torch.float, device=output[0].device)
     # print(zero.shape)
+
+    from model.config import DefaultConfig
+    from model.gfocal_head import GFLHead
+
+    config = DefaultConfig()
+    in_channel = 64
+    gfl_head = GFLHead(in_channel=in_channel, class_num=config.class_num,
+                        score_threshold=config.score_threshold, nms_iou_threshold=config.nms_iou_threshold,
+                        max_detection_boxes_num=config.max_detection_boxes_num,
+                        use_gl=True, gl_cfg=config.gl_cfg, 
+                        strides=config.strides, limit_range=config.limit_range)
+    
+    batch_size = 4
+    h, w = 64, 64
+    inputs = [torch.rand(batch_size, in_channel, h // (2 ** i), w // (2 ** i)) for i in range(5)]
+    cls_logits, reg_preds = gfl_head(inputs)
+    print(len(cls_logits))
+    print(len(reg_preds))
+    for preds in reg_preds:
+        print(preds.shape)
+    
+    m = 10
+    gt_boxes = torch.rand((batch_size, m, 4)) * 16
+    classes = (torch.rand((batch_size, m)) * (config.class_num)).long()
+
+    losses = gfl_head.loss(inputs=[[cls_logits, reg_preds], gt_boxes, classes])
+
+    for loss in losses:
+        print(loss.shape)
+    
+    scores, classes, boxes = gfl_head.inference([cls_logits, reg_preds])
+    print('inference')
+    print(scores.shape)
+    print(classes.shape)
+    print(boxes.shape)
+
+    

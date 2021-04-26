@@ -2,6 +2,7 @@
 from functools import reduce
 import torch
 import torch.nn as nn
+import torch.nn.functional as F 
 from .config import DefaultConfig
 from .utils import weighted_loss
 
@@ -97,10 +98,11 @@ def coords_fmap2orig(feature, stride):
 
 class GenTargets(nn.Module):
 
-    def __init__(self, strides, limit_range, is_generate_weight=False):
+    def __init__(self, strides, limit_range, add_centerness=True, is_generate_weight=False):
         super().__init__()
         self.strides = strides
         self.limit_range = limit_range
+        self.add_centerness = add_centerness
         self.is_generate_weight = is_generate_weight
         assert len(strides) == len(limit_range)
 
@@ -118,35 +120,57 @@ class GenTargets(nn.Module):
         cnt_targets:[batch_size,sum(_h*_w),1]
         reg_targets:[batch_size,sum(_h*_w),4]
         '''
-        cls_logits, cnt_logits, reg_preds = inputs[0]
+        if self.add_centerness:
+            cls_logits, cnt_logits, reg_preds = inputs[0]
+        else:
+            cls_logits, reg_preds = inputs[0]
         gt_boxes = inputs[1]
         classes = inputs[2]
         cls_targets_all_level = []
-        cnt_targets_all_level = []
+        if self.add_centerness:
+            cnt_targets_all_level = []
         reg_targets_all_level = []
         if self.is_generate_weight:
             label_weight_all_level = []
             bbox_weight_all_leval = []
         assert len(self.strides) == len(cls_logits)
         for level in range(len(cls_logits)):
-            level_out = [cls_logits[level], cnt_logits[level], reg_preds[level]]
+            if self.add_centerness:
+                level_out = [cls_logits[level], cnt_logits[level], reg_preds[level]]
+            else:
+                level_out = [cls_logits[level], reg_preds[level]]
             level_targets = self._gen_level_targets(level_out, gt_boxes, classes, self.strides[level],
                                                     self.limit_range[level])
             cls_targets_all_level.append(level_targets[0])
-            cnt_targets_all_level.append(level_targets[1])
-            reg_targets_all_level.append(level_targets[2])
-            if self.is_generate_weight:
-                label_weight_all_level.append(level_targets[3])
-                bbox_weight_all_leval.append(level_targets[4])
+            if self.add_centerness:
+                cnt_targets_all_level.append(level_targets[1])
+                reg_targets_all_level.append(level_targets[2])
+                if self.is_generate_weight:
+                    label_weight_all_level.append(level_targets[3])
+                    bbox_weight_all_leval.append(level_targets[4])
+            else:
+                reg_targets_all_level.append(level_targets[1])
+                if self.is_generate_weight:
+                    label_weight_all_level.append(level_targets[2])
+                    bbox_weight_all_leval.append(level_targets[3])
 
         if self.is_generate_weight:
-            return (torch.cat(cls_targets_all_level, dim=1),
-                    torch.cat(cnt_targets_all_level, dim=1),
-                    torch.cat(reg_targets_all_level, dim=1),
-                    torch.cat(label_weight_all_level, dim=1),
-                    torch.cat(bbox_weight_all_leval, dim=1))
+            if self.add_centerness:
+                return (torch.cat(cls_targets_all_level, dim=1),
+                        torch.cat(cnt_targets_all_level, dim=1),
+                        torch.cat(reg_targets_all_level, dim=1),
+                        torch.cat(label_weight_all_level, dim=1),
+                        torch.cat(bbox_weight_all_leval, dim=1))
+            else:
+                return (torch.cat(cls_targets_all_level, dim=1),
+                        torch.cat(reg_targets_all_level, dim=1),
+                        torch.cat(label_weight_all_level, dim=1),
+                        torch.cat(bbox_weight_all_leval, dim=1))
         else:
-            return torch.cat(cls_targets_all_level, dim=1), torch.cat(cnt_targets_all_level, dim=1), torch.cat(reg_targets_all_level, dim=1)
+            if self.add_centerness:
+                return torch.cat(cls_targets_all_level, dim=1), torch.cat(cnt_targets_all_level, dim=1), torch.cat(reg_targets_all_level, dim=1)
+            else:
+                return torch.cat(cls_targets_all_level, dim=1), torch.cat(reg_targets_all_level, dim=1)
 
     def _gen_level_targets(self, out, gt_boxes, classes, stride, limit_range, sample_radiu_ratio=1.5):
         '''
@@ -160,9 +184,12 @@ class GenTargets(nn.Module):
         Returns  
         cls_targets,cnt_targets,reg_targets
         '''
-        cls_logits, cnt_logits, reg_preds = out
+        if self.add_centerness:
+            cls_logits, cnt_logits, reg_preds = out
+        else:
+            cls_logits, reg_preds = out
         batch_size = cls_logits.shape[0]
-        class_num = cls_logits.shape[1]
+        h_mul_w = cls_logits.shape[2] * cls_logits.shape[3]
         m = gt_boxes.shape[1]
 
         cls_logits = cls_logits.permute(
@@ -171,16 +198,17 @@ class GenTargets(nn.Module):
         coords = coords_fmap2orig(cls_logits, stride).to(
             device=gt_boxes.device)  # [h*w,2]
 
-        cls_logits = cls_logits.reshape(
-            (batch_size, -1, class_num))  # [batch_size,h*w,class_num]
-        cnt_logits = cnt_logits.permute(0, 2, 3, 1)
-        cnt_logits = cnt_logits.reshape(
-            (batch_size, -1, 1))  # [batch_size,h * w, 1]
-        reg_preds = reg_preds.permute(0, 2, 3, 1)
-        reg_preds = reg_preds.reshape(
-            (batch_size, -1, 4))  # [batch_size,h * w, 4]
+        # cls_logits = cls_logits.reshape(
+        #     (batch_size, -1, class_num))  # [batch_size,h*w,class_num]
+        # if self.add_centerness:
+        #     cnt_logits = cnt_logits.permute(0, 2, 3, 1)
+        #     cnt_logits = cnt_logits.reshape(
+        #         (batch_size, -1, 1))  # [batch_size,h * w, 1]
+        # reg_preds = reg_preds.permute(0, 2, 3, 1)
+        # reg_preds = reg_preds.reshape(
+        #     (batch_size, -1, 4))  # [batch_size,h * w, 4]
 
-        h_mul_w = cls_logits.shape[1]
+        # h_mul_w = cls_logits.shape[1]
 
         x = coords[:, 0]
         y = coords[:, 1]
@@ -236,33 +264,35 @@ class GenTargets(nn.Module):
         cls_targets = torch.reshape(
             cls_targets, (batch_size, -1, 1))  # [batch_size,h*w,1]
 
-        # center-ness
-        left_right_min = torch.min(
-            reg_targets[..., 0], reg_targets[..., 2])  # [batch_size,h*w]
-        left_right_max = torch.max(reg_targets[..., 0], reg_targets[..., 2])
-        top_bottom_min = torch.min(reg_targets[..., 1], reg_targets[..., 3])
-        top_bottom_max = torch.max(reg_targets[..., 1], reg_targets[..., 3])
-        # origin eps = 1e-10
-        eps = 1e-6
-        cnt_targets = ((left_right_min*top_bottom_min)/(left_right_max *
-                       top_bottom_max+eps)).sqrt().unsqueeze(dim=-1)  # [batch_size,h*w,1]
-
+        if self.add_centerness:
+            # center-ness
+            left_right_min = torch.min(
+                reg_targets[..., 0], reg_targets[..., 2])  # [batch_size,h*w]
+            left_right_max = torch.max(reg_targets[..., 0], reg_targets[..., 2])
+            top_bottom_min = torch.min(reg_targets[..., 1], reg_targets[..., 3])
+            top_bottom_max = torch.max(reg_targets[..., 1], reg_targets[..., 3])
+            # origin eps = 1e-10
+            eps = 1e-10
+            cnt_targets = ((left_right_min*top_bottom_min)/(left_right_max * top_bottom_max+eps)).sqrt().unsqueeze(dim=-1)  # [batch_size,h*w,1]
+        
         assert reg_targets.shape == (batch_size, h_mul_w, 4)
         assert cls_targets.shape == (batch_size, h_mul_w, 1)
-        assert cnt_targets.shape == (batch_size, h_mul_w, 1)
+        if self.add_centerness:
+            assert cnt_targets.shape == (batch_size, h_mul_w, 1)
 
         # process neg coords
         mask_pos_2 = mask_pos.long().sum(dim=-1)  # [batch_size,h*w]
         # num_pos=mask_pos_2.sum(dim=-1)
         # assert num_pos.shape==(batch_size,)
         if self.is_generate_weight:
-            neg_inds = (mask_pos_2 < 1)
+            neg_inds = (mask_pos_2 == 0)
 
         mask_pos_2 = mask_pos_2 >= 1
         assert mask_pos_2.shape == (batch_size, h_mul_w)
 
         cls_targets[~mask_pos_2] = 0  # [batch_size,h*w,1] 负样本
-        cnt_targets[~mask_pos_2] = -1
+        if self.add_centerness:
+            cnt_targets[~mask_pos_2] = -1
         reg_targets[~mask_pos_2] = -1
 
         if self.is_generate_weight:
@@ -276,9 +306,15 @@ class GenTargets(nn.Module):
             bbox_weight[mask_pos_2] = 1.0
 
         if self.is_generate_weight:
-            return cls_logits, cnt_logits, reg_targets, label_weight, bbox_weight
+            if self.add_centerness:
+                return cls_targets, cnt_targets, reg_targets, label_weight, bbox_weight
+            else:
+                return cls_targets, reg_targets, label_weight, bbox_weight
         else:
-            return cls_targets, cnt_targets, reg_targets
+            if self.add_centerness:
+                return cls_targets, cnt_targets, reg_targets
+            else:
+                return cls_targets, reg_targets
 
 
 def compute_cls_loss(preds, targets, mask, weight=None):
@@ -488,6 +524,7 @@ class LOSS(nn.Module):
             self.uncertainty_predictor = UncertaintyWithLossFeature(class_num=self.config.class_num,
                                                                     embedding_dim=self.uncertainty_embedding_dim)
 
+
     def forward(self, inputs):
         '''
         inputs list
@@ -497,31 +534,50 @@ class LOSS(nn.Module):
             or list contains five elements [[batch_size,sum(_h*_w),1],[batch_size,sum(_h*_w),1],[batch_size,sum(_h*_w),4], [batch_size,sum(_h*_w),1],[batch_size,sum(_h*_w),4]]
         '''
         preds, targets = inputs
-        cls_logits, cnt_logits, reg_preds = preds
-        if len(targets) == 3:
-            cls_targets, cnt_targets, reg_targets = targets
-            label_weight = None
-            bbox_weight = None
+        if self.config.add_centerness:
+            cls_logits, cnt_logits, reg_preds = preds
         else:
-            cls_targets, cnt_targets, reg_targets, label_weight, bbox_weight = targets
+            cls_logits, reg_preds = preds
+
+        if self.config.add_centerness:
+            if self.config.is_generate_weight:
+                cls_targets, cnt_targets, reg_targets, label_weight, bbox_weight = targets
+            else:
+                cls_targets, cnt_targets, reg_targets = targets
+                label_weight = None
+                bbox_weight = None
+        else:
+            if self.config.is_generate_weight:
+                cls_targets, reg_targets, label_weight, bbox_weight = targets
+            else:
+                cls_targets, reg_targets = targets
+                label_weight = None
+                bbox_weight = None
+
         if hasattr(self.config, 'transformer_cfg'):
             label_weight, bbox_weight, _ = self.predict_weight(cls_targets, cnt_targets, reg_targets, label_weight, bbox_weight,
-                                                            cls_logits, cnt_logits, reg_preds)
+                                                            cls_logits, reg_preds)
+        
         # [batch_size,sum(_h*_w)]
-        mask_pos = (cnt_targets > -1).squeeze(dim=-1)
-        if hasattr(self.config, 'transformer_cfg'):
-            print('')
+        if self.config.add_centerness:
+            mask_pos = (cnt_targets > -1).squeeze(dim=-1)
+        else:
+            mask_pos = (cls_targets > 0).squeeze(dim=-1)
+
         cls_loss = compute_cls_loss(cls_logits, cls_targets, mask_pos, weight=label_weight).mean()  # []
-        cnt_loss = compute_cnt_loss(cnt_logits, cnt_targets, mask_pos, mode=self.config.cnt_loss_mode).mean()
+
+        if self.config.add_centerness:
+            cnt_loss = compute_cnt_loss(cnt_logits, cnt_targets, mask_pos, mode=self.config.cnt_loss_mode).mean()
+
         reg_loss = compute_reg_loss(reg_preds, reg_targets, mask_pos, weight=bbox_weight, mode=self.config.reg_loss_mode).mean()
         if self.config.add_centerness:
-            total_loss = cls_loss+cnt_loss+reg_loss
+            total_loss = cls_loss + cnt_loss + reg_loss
             return cls_loss, cnt_loss, reg_loss, total_loss
         else:
-            total_loss = cls_loss+reg_loss+cnt_loss*0.0
-            return cls_loss, cnt_loss, reg_loss, total_loss
+            total_loss = cls_loss + reg_loss
+            return cls_loss, reg_loss, total_loss
 
-    def predict_weight(self, cls_targets, cnt_targets, reg_targets, label_weight, bbox_weight, cls_logits, cnt_logits, reg_preds):
+    def predict_weight(self, cls_targets, cnt_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds):
         
         mask = (cnt_targets > -1).squeeze(dim=-1)
 
@@ -581,6 +637,7 @@ class LOSS(nn.Module):
         bbox_weight = bbox_weight.detach().data * uncertainty_prediction_reg
 
         return label_weight, bbox_weight, None
+
 
 if __name__ == "__main__":
     loss = compute_cnt_loss([torch.ones([2, 1, 4, 4])]*5, torch.ones(

@@ -6,4 +6,5 @@ data/
 .ipynb_checkpoints
 checkpoint/
 coco_bbox_results.json
+__pycache__/
 

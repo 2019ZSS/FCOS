@@ -1,3 +1,4 @@
+from model import config
 from model.fcos import FCOSDetector
 import torch
 from dataset.VOC_dataset import VOCDataset
@@ -102,7 +103,7 @@ if opt.resume:
 
 for epoch in range(init_epoch, EPOCHS):
     base = 0.1
-    
+    lr = LR_INIT
     def update_lr(lr, base):
         lr = LR_INIT * base
         for param in optimizer.param_groups:
@@ -122,10 +123,10 @@ for epoch in range(init_epoch, EPOCHS):
             lr = lr_func(GLOBAL_STEPS)
             for param in optimizer.param_groups:
                 param['lr']=lr
-            # if GLOBAL_STEPS < WARMPUP_STEPS:
-            #     lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
-            #     for param in optimizer.param_groups:
-            #         param['lr'] = lr
+            if GLOBAL_STEPS < WARMPUP_STEPS:
+                lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
+                for param in optimizer.param_groups:
+                    param['lr'] = lr
             
             # if GLOBAL_STEPS in (20001, 27001):
             #     lr, base = update_lr(lr, base)
@@ -137,13 +138,23 @@ for epoch in range(init_epoch, EPOCHS):
             loss = losses[-1]
             loss.mean().backward()
             optimizer.step()
-
             end_time = time.time()
             cost_time = int((end_time - start_time) * 1000)
-            print(
-                "global_steps:%d epoch:%d steps:%d/%d cls_loss:%.6f cnt_loss:%.6f reg_loss:%.6f cost_time:%dms lr=%.6e total_loss:%.6f" % \
-                (GLOBAL_STEPS, epoch + 1, epoch_step + 1, steps_per_epoch, losses[0].mean(), losses[1].mean(),
-                losses[2].mean(), cost_time, lr, loss.mean()))
+            if config.DefaultConfig.use_gl:
+                print("global_steps:%d epoch:%d steps:%d/%d qfl_loss:%.6f bbox_loss:%.6f dfl_loss:%.6f cost_time:%dms lr=%.6e total_loss:%.6f" % \
+                        (GLOBAL_STEPS, epoch + 1, epoch_step + 1, steps_per_epoch, losses[0].mean(), losses[1].mean(),
+                        losses[2].mean(), cost_time, lr, loss.mean()))
+            else:
+                if len(losses) == 4:
+                    print(
+                        "global_steps:%d epoch:%d steps:%d/%d cls_loss:%.6f cnt_loss:%.6f reg_loss:%.6f cost_time:%dms lr=%.6e total_loss:%.6f" % \
+                        (GLOBAL_STEPS, epoch + 1, epoch_step + 1, steps_per_epoch, losses[0].mean(), losses[1].mean(),
+                        losses[2].mean(), cost_time, lr, loss.mean()))
+                else:
+                    print(
+                        "global_steps:%d epoch:%d steps:%d/%d cls_loss:%.6f  reg_loss:%.6f cost_time:%dms lr=%.6e total_loss:%.6f" % \
+                        (GLOBAL_STEPS, epoch + 1, epoch_step + 1, steps_per_epoch, 
+                        losses[0].mean(), losses[1].mean(), cost_time, lr, loss.mean()))
 
             GLOBAL_STEPS += 1
 
@@ -157,7 +168,7 @@ for epoch in range(init_epoch, EPOCHS):
         }
         torch.save(checkpoint, os.path.join(saved_path, "model_{}_{}_{}_{}.pth".format(BATCH_SIZE, resize_size[0],resize_size[1], epoch + 1)))
 
-    if epoch % interval == 0 or epoch == EPOCHS:
+    if (epoch + 1) % interval == 0 or (epoch + 1) == EPOCHS:
         torch.save(model.state_dict(), os.path.join(saved_path, "model_{}_{}_{}_{}.pth".format(BATCH_SIZE, resize_size[0],resize_size[1], epoch + 1)))
 
 
