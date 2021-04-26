@@ -97,22 +97,34 @@ class GFLHead(ClsCntRegHead):
         for level in range(level_size):
             bbox_targets.append(self._coords2boxes(grid_center_all[level], reg_targets_all[level]))
         for batch in range(batch_size):
-            num_pos = 0
+            num_pos = []
+            avg_factor = []
             losses = []
             for level in range(level_size):
                 losses.append(
                     self.loss_single(grid_center_all[level], cls_logits[level][batch], reg_preds[level][batch],
-                                     cls_targets_all[level][batch], bbox_targets[level][batch],
-                                     label_weight_all[level][batch], self.strides[level])
+                                        cls_targets_all[level][batch], bbox_targets[level][batch],
+                                        label_weight_all[level][batch], self.strides[level])
                 )
-                num_pos += losses[-1][-1]
-            loss_qfl = torch.sum(torch.cat([loss[0].view(1) for loss in losses]), dim=0).view(1)
-            loss_bbox = torch.sum(torch.cat([loss[1].view(1) for loss in losses]), dim=0).view(1)
-            loss_dfl = torch.sum(torch.cat([loss[2].view(1) for loss in losses]), dim=0).view(1)
-            if num_pos < 1:
-                total_loss = loss_qfl
+                avg_factor.append(losses[-1][-2])
+                num_pos.append(losses[-1][-1])
+            
+            num_pos = sum(num_pos)
+            num_pos = num_pos.item()
+
+            avg_factor = sum(avg_factor)
+            avg_factor = avg_factor.item()
+            
+            if avg_factor <= 0:
+                loss_qfl = torch.tensor(0, dtype=torch.float32, requires_grad=True).cuda().view(1)
+                loss_bbox = torch.tensor(0, dtype=torch.float32, requires_grad=True).cuda().view(1)
+                loss_dfl = torch.tensor(0, dtype=torch.float32, requires_grad=True).cuda().view(1)
             else:
-                total_loss = (loss_qfl + loss_bbox + loss_dfl) / num_pos
+                loss_qfl = (torch.sum(torch.cat([loss[0].view(1) for loss in losses]), dim=0) / max(1.0, num_pos)).view(1)
+                loss_bbox = torch.sum(torch.cat([loss[1].view(1) / avg_factor for loss in losses]), dim=0).view(1) 
+                loss_dfl = torch.sum(torch.cat([loss[2].view(1) / avg_factor for loss in losses]), dim=0).view(1)
+            
+            total_loss = (loss_qfl + loss_bbox + loss_dfl)
             batch_loss.append([loss_qfl, loss_bbox, loss_dfl, total_loss])
 
         loss_qfl = torch.cat([loss[0] for loss in batch_loss], dim=0)
@@ -142,7 +154,7 @@ class GFLHead(ClsCntRegHead):
         num_pos = torch.count_nonzero(pos_inds)
         score = labels.new_zeros(labels.shape).float()
 
-        if num_pos > 0:
+        if len(pos_inds) > 0:
 
             pos_bbox_targets = bbox_targets[pos_inds]
             pos_bbox_pred = bbox_pred[pos_inds]  # (n, 4 * (reg_max + 1))
@@ -162,8 +174,8 @@ class GFLHead(ClsCntRegHead):
                                             is_aligned=True)
             pred_corners = pos_bbox_pred.reshape(-1, self.gl_cfg.reg_max + 1)
             target_corners = bbox2distance(pos_grid_cell_centers,
-                                           pos_decode_bbox_targets,
-                                           self.gl_cfg.reg_max).reshape(-1)
+                                            pos_decode_bbox_targets,
+                                            self.gl_cfg.reg_max).reshape(-1)
 
             # regression loss
             loss_bbox = self.loss_bbox(
@@ -188,7 +200,7 @@ class GFLHead(ClsCntRegHead):
         # qfl loss
         loss_qfl = self.loss_qfl(cls_score, (labels, score), weight=label_weights)
 
-        return loss_qfl.sum(), loss_bbox.sum(), loss_dfl.sum(), num_pos
+        return loss_qfl.sum(), loss_bbox.sum(), loss_dfl.sum(), weight_targets.sum(), num_pos
 
     def target_assign(self, cls_logits, reg_preds, gt_boxes, classes):
         assert len(cls_logits) == len(self.strides)
