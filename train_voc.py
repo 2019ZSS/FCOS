@@ -123,10 +123,10 @@ for epoch in range(init_epoch, EPOCHS):
             lr = lr_func(GLOBAL_STEPS)
             for param in optimizer.param_groups:
                 param['lr']=lr
-            if GLOBAL_STEPS < WARMPUP_STEPS:
-                lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
-                for param in optimizer.param_groups:
-                    param['lr'] = lr
+            # if GLOBAL_STEPS < WARMPUP_STEPS:
+            #     lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
+            #     for param in optimizer.param_groups:
+            #         param['lr'] = lr
             
             # if GLOBAL_STEPS in (20001, 27001):
             #     lr, base = update_lr(lr, base)
