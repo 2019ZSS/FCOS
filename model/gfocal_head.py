@@ -98,7 +98,6 @@ class GFLHead(ClsCntRegHead):
             bbox_targets.append(self._coords2boxes(grid_center_all[level], reg_targets_all[level]))
         for batch in range(batch_size):
             num_pos = []
-            avg_factor = []
             losses = []
             for level in range(level_size):
                 losses.append(
@@ -106,23 +105,17 @@ class GFLHead(ClsCntRegHead):
                                         cls_targets_all[level][batch], bbox_targets[level][batch],
                                         label_weight_all[level][batch], self.strides[level])
                 )
-                avg_factor.append(losses[-1][-2])
                 num_pos.append(losses[-1][-1])
             
-            num_pos = sum(num_pos)
-            num_pos = num_pos.item()
-
-            avg_factor = sum(avg_factor)
-            avg_factor = avg_factor.item()
-            
-            if avg_factor <= 0:
-                loss_qfl = torch.tensor(0, dtype=torch.float32, requires_grad=True).cuda().view(1)
-                loss_bbox = torch.tensor(0, dtype=torch.float32, requires_grad=True).cuda().view(1)
-                loss_dfl = torch.tensor(0, dtype=torch.float32, requires_grad=True).cuda().view(1)
+            num_pos = sum(num_pos).item()
+            if num_pos <= 0:
+                loss_qfl = torch.tensor(0, dtype=torch.float32, requires_grad=True).to(gt_boxes.device).view(1)
+                loss_bbox = torch.tensor(0, dtype=torch.float32, requires_grad=True).to(gt_boxes.device).view(1)
+                loss_dfl = torch.tensor(0, dtype=torch.float32, requires_grad=True).to(gt_boxes.device).view(1)
             else:
-                loss_qfl = (torch.sum(torch.cat([loss[0].view(1) for loss in losses]), dim=0) / max(1.0, num_pos)).view(1)
-                loss_bbox = torch.sum(torch.cat([loss[1].view(1) / avg_factor for loss in losses]), dim=0).view(1) 
-                loss_dfl = torch.sum(torch.cat([loss[2].view(1) / avg_factor for loss in losses]), dim=0).view(1)
+                loss_qfl = (sum([loss[0].view(1) for loss in losses]) / max(1.0, num_pos)).view(1)
+                loss_bbox = (sum([loss[1].view(1) for loss in losses]) / max(1.0, num_pos)).view(1)
+                loss_dfl = (sum([loss[2].view(1) for loss in losses]) / max(1.0, num_pos)).view(1)
             
             total_loss = (loss_qfl + loss_bbox + loss_dfl)
             batch_loss.append([loss_qfl, loss_bbox, loss_dfl, total_loss])
@@ -170,7 +163,6 @@ class GFLHead(ClsCntRegHead):
 
             score[pos_inds] = bbox_overlaps(pos_decode_bbox_pred.detach().float(),
                                             pos_decode_bbox_targets,
-                                            mode='giou',
                                             is_aligned=True)
             pred_corners = pos_bbox_pred.reshape(-1, self.gl_cfg.reg_max + 1)
             target_corners = bbox2distance(pos_grid_cell_centers,
@@ -200,7 +192,7 @@ class GFLHead(ClsCntRegHead):
         # qfl loss
         loss_qfl = self.loss_qfl(cls_score, (labels, score), weight=label_weights)
 
-        return loss_qfl.sum(), loss_bbox.sum(), loss_dfl.sum(), weight_targets.sum(), num_pos
+        return loss_qfl.sum(), loss_bbox.sum(), loss_dfl.sum(), num_pos
 
     def target_assign(self, cls_logits, reg_preds, gt_boxes, classes):
         assert len(cls_logits) == len(self.strides)
@@ -377,7 +369,6 @@ class GFLHead(ClsCntRegHead):
         '''
         batch_size = cls_logits[0].shape[0]
         class_num = cls_logits[0].shape[1]
-        max_shape = (cls_logits[0].shape[-2], cls_logits[0].shape[-1])
         cls_scores = []
         bboxes = []
 
@@ -389,7 +380,7 @@ class GFLHead(ClsCntRegHead):
             boxes = []
             for batch in range(batch_size):
                 bbox_pred = self.distribution_project(reg_pred[batch].permute(1, 2, 0)) * stride
-                boxes.append(distance2bbox(coord, bbox_pred, max_shape))
+                boxes.append(distance2bbox(coord, bbox_pred))
                 # boxes[-1].shape [h * w, 4]
             bboxes.append(boxes)
 
@@ -460,7 +451,7 @@ class GFLHead(ClsCntRegHead):
             idx = (iou <= thr).nonzero().squeeze()
             if idx.numel() == 0:
                 break
-            order = order[idx+1]
+            order = order[idx + 1]
         return torch.LongTensor(keep)
 
     def batched_nms(self, boxes, scores, idxs, iou_threshold):
