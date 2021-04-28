@@ -589,19 +589,25 @@ class LOSS(nn.Module):
             return torch.cat(preds_reshape, dim=1)
         
         batch_size = cls_targets.shape[0]
-
-        cls_logits = cat(cls_logits, batch_size, cls_logits[0].shape[1])
+        class_num = cls_logits[0].shape[1]
+        cls_logits = cat(cls_logits, batch_size, class_num)
         reg_preds = cat(reg_preds, batch_size, reg_targets.shape[-1])
         
         ious = []
+        target_inds = []
         for batch_index in range(batch_size):
             iou = giou_loss(pred=reg_preds[batch_index], target=reg_targets[batch_index], reduction='none')
             iou[~mask[batch_index]] = 0.0
             ious.append(iou)
+            target_pos = cls_targets[batch_index]
+            # sparse-->onehot
+            target_pos = (torch.arange(1, class_num + 1, device=target_pos.device)[None, :] == target_pos).float()
+            target_inds.append(target_pos) 
         
-        pos_inds = cls_targets > 0
+        target_inds = torch.stack(target_inds)
+        pos_inds = (target_inds > 0)
         postive_score = cls_logits[pos_inds].sigmoid()
-        total_scores = torch.zeros(cls_logits.shape, dtype=torch.float, device=cls_targets.device)
+        total_scores = torch.zeros_like(cls_logits, dtype=torch.float32, device=cls_logits.device)
         total_scores[pos_inds] = postive_score
 
         ious = torch.stack(ious, dim=0).unsqueeze(dim=-1)
