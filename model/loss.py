@@ -555,8 +555,7 @@ class LOSS(nn.Module):
                 bbox_weight = None
 
         if hasattr(self.config, 'transformer_cfg'):
-            label_weight, bbox_weight, _ = self.predict_weight(cls_targets, cnt_targets, reg_targets, label_weight, bbox_weight,
-                                                            cls_logits, reg_preds)
+            label_weight, bbox_weight, _ = self.predict_weight(cls_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds)
         
         # [batch_size,sum(_h*_w)]
         if self.config.add_centerness:
@@ -577,9 +576,9 @@ class LOSS(nn.Module):
             total_loss = cls_loss + reg_loss
             return cls_loss, reg_loss, total_loss
 
-    def predict_weight(self, cls_targets, cnt_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds):
+    def predict_weight(self, cls_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds):
         
-        mask = (cnt_targets > -1).squeeze(dim=-1)
+        mask = (cls_targets > 0).squeeze(dim=-1)
 
         pos_inds = cls_targets > 0
         postive_score = cls_targets[pos_inds].sigmoid()
