@@ -579,11 +579,6 @@ class LOSS(nn.Module):
     def predict_weight(self, cls_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds):
         
         mask = (cls_targets > 0).squeeze(dim=-1)
-
-        pos_inds = cls_targets > 0
-        postive_score = cls_targets[pos_inds].sigmoid()
-        total_scores = torch.zeros(cls_targets.shape, dtype=torch.float, device=cls_targets.device)
-        total_scores[pos_inds] = postive_score
         
         def cat(preds, batch_size, c):
             preds_reshape = []
@@ -603,6 +598,11 @@ class LOSS(nn.Module):
             iou = giou_loss(pred=reg_preds[batch_index], target=reg_targets[batch_index], reduction='none')
             iou[~mask[batch_index]] = 0.0
             ious.append(iou)
+        
+        pos_inds = cls_targets > 0
+        postive_score = cls_logits[pos_inds].sigmoid()
+        total_scores = torch.zeros(cls_logits.shape, dtype=torch.float, device=cls_targets.device)
+        total_scores[pos_inds] = postive_score
 
         ious = torch.stack(ious, dim=0).unsqueeze(dim=-1)
         uncertainty_prediction = self.uncertainty_predictor(
