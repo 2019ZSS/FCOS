@@ -74,7 +74,7 @@ optimizer = torch.optim.SGD(model.parameters(),lr=LR_INIT, momentum=0.9, weight_
 #         )
 #     return float(lr)
 
-lr_schedule = [20001, 27001, 32001]
+lr_schedule = [8112, 13520, 20001, 27001, 32001]
 def lr_func(step):
     lr = LR_INIT
     if step < WARMPUP_STEPS:
