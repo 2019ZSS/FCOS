@@ -137,6 +137,7 @@ if __name__=="__main__":
     parser.add_argument("--height", type=int, default=800, help="height of each image")
     parser.add_argument("--width", type=int, default=1333, help="width of each image")
     parser.add_argument("--checkpoint", type=str, default='', help='checkpoint model')
+    parser.add_argument("--strict", type=bool, default=True, help='strict mode load the model')
     
     opt = parser.parse_args()
     resize_size = [opt.height, opt.width]
@@ -167,7 +168,7 @@ if __name__=="__main__":
         model_path = opt.checkpoint
 #     model_path = './checkpoint/simo_ircnn/model_8_720_1024_45.pth'
 #     model_path = './checkpoint/voc_77.8.pth'
-    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'), strict=opt.strict))
     # model=convertSyncBNtoBN(model)
     # print("INFO===>success convert SyncBN to BN")
     model = model.cuda().eval()
