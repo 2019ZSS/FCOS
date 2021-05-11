@@ -13,6 +13,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--epochs", type=int, default=60, help="number of epochs")
 parser.add_argument("--batch_size", type=int, default=8, help="size of each image batch")
+parser.add_argument("--accumulate_step", type=int, default=1, help="size of each batch step")
 parser.add_argument("--height", type=int, default=800, help="height of each image")
 parser.add_argument("--width", type=int, default=1333, help="width of each image")
 parser.add_argument("--n_cpu", type=int, default=4, help="number of cpu threads to use during batch generation")
@@ -48,6 +49,7 @@ if not os.path.exists(saved_path):
 # model.load_state_dict(torch.load('/mnt/cephfs_new_wj/vc/zhangzhenghao/FCOS.Pytorch/output1/model_6.pth'))
 
 BATCH_SIZE = opt.batch_size
+accumulate_step = opt.accumulate_step
 EPOCHS = opt.epochs
 #WARMPUP_STEPS_RATIO = 0.12
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,
@@ -74,7 +76,7 @@ optimizer = torch.optim.SGD(model.parameters(),lr=LR_INIT, momentum=0.9, weight_
 #         )
 #     return float(lr)
 
-lr_schedule = [8112, 13520, 20001, 27001, 32001]
+lr_schedule = [20001, 27001, 32001]
 def lr_func(step):
     lr = LR_INIT
     if step < WARMPUP_STEPS:
@@ -133,11 +135,12 @@ for epoch in range(init_epoch, EPOCHS):
             
             start_time = time.time()
 
-            optimizer.zero_grad()
             losses = model([batch_imgs, batch_boxes, batch_classes])
             loss = losses[-1]
             loss.mean().backward()
-            optimizer.step()
+            if GLOBAL_STEPS % accumulate_step == 0:
+                optimizer.step()
+                optimizer.zero_grad()
             end_time = time.time()
             cost_time = int((end_time - start_time) * 1000)
             if config.DefaultConfig.use_gl:
