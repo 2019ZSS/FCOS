@@ -9,11 +9,12 @@ from .utils import weighted_loss
 
 class UncertaintyWithLossFeature(nn.Module):
 
-    def __init__(self, class_num=20, embedding_dim=64):
+    def __init__(self, class_num=20, embedding_dim=64, use_iou=True, use_cnt=True):
         super().__init__()
         self.class_num = class_num
         self.embedding_dim = embedding_dim
-
+        self.use_iou = use_iou
+        self.use_cnt = use_cnt
         self.cls_loss_net = nn.Sequential(
             nn.Linear(in_features=1, out_features=self.embedding_dim),
             nn.ReLU(),
@@ -35,15 +36,31 @@ class UncertaintyWithLossFeature(nn.Module):
                       out_features=self.embedding_dim),
             nn.ReLU()
         )
-        self.iou_net = nn.Sequential(
-            nn.Linear(in_features=1, out_features=self.embedding_dim),
-            nn.ReLU(),
-            nn.Linear(in_features=self.embedding_dim,
-                      out_features=self.embedding_dim),
-            nn.ReLU()
-        )
+        self.in_pre = 3
+        if self.use_iou:
+            self.in_pre += 1
+            self.iou_net = nn.Sequential(
+                nn.Linear(in_features=1, out_features=self.embedding_dim),
+                nn.ReLU(),
+                nn.Linear(in_features=self.embedding_dim,
+                        out_features=self.embedding_dim),
+                nn.ReLU()
+            )
+        else:
+            self.iou_net = None
+        if self.use_cnt:
+            self.in_pre += 1
+            self.cnt_net = nn.Sequential(
+                nn.Linear(in_features=1, out_features=self.embedding_dim),
+                nn.ReLU(),
+                nn.Linear(in_features=self.embedding_dim,
+                        out_features=self.embedding_dim),
+                nn.ReLU()
+            )
+        else:
+            self.cnt_net = None
         self.predictor = nn.Sequential(
-            nn.Linear(in_features=self.embedding_dim * 4,
+            nn.Linear(in_features=self.embedding_dim * self.in_pre,
                       out_features=self.embedding_dim),
             nn.ReLU(),
             nn.Linear(in_features=self.embedding_dim, out_features=2)
@@ -51,13 +68,14 @@ class UncertaintyWithLossFeature(nn.Module):
         self.init_weight()
 
     def init_weight(self):
-        for m in [self.cls_loss_net, self.reg_loss_net, self.prob_net, self.iou_net, self.predictor]:
-            nn.init.normal_(m[0].weight, mean=0.0, std=0.0001)
-            nn.init.constant_(m[0].bias, 0)
-            nn.init.normal_(m[2].weight, mean=0.0, std=0.0001)
-            nn.init.constant_(m[2].bias, 0)
+        for m in [self.cls_loss_net, self.reg_loss_net, self.prob_net, self.iou_net, self.cnt_net, self.predictor]:
+            if m is not None:
+                nn.init.normal_(m[0].weight, mean=0.0, std=0.01)
+                nn.init.constant_(m[0].bias, 0)
+                nn.init.normal_(m[2].weight, mean=0.0, std=0.01)
+                nn.init.constant_(m[2].bias, 0)
 
-    def forward(self, cls_loss, reg_loss, probs, ious):
+    def forward(self, cls_loss, reg_loss, probs, ious, cnts):
         '''
         Args:
         cls_loss:
@@ -68,9 +86,18 @@ class UncertaintyWithLossFeature(nn.Module):
         cls_loss_feature = self.cls_loss_net(cls_loss)
         reg_loss_feature = self.reg_loss_net(reg_loss)
         probs_feature = self.prob_net(probs)
-        ious_feature = self.iou_net(ious)
-        non_visual_input = torch.cat(
-            (cls_loss_feature, reg_loss_feature, probs_feature, ious_feature), dim=-1)
+        if self.use_iou:
+            ious_feature = self.iou_net(ious)
+        if self.use_cnt:
+            cnts_feature = self.cnt_net(cnts)
+        if self.use_iou and not self.use_cnt:
+            non_visual_input = torch.cat((cls_loss_feature, reg_loss_feature, probs_feature, ious_feature), dim=-1)
+        elif not self.use_iou and self.use_cnt:
+            non_visual_input = torch.cat((cls_loss_feature, reg_loss_feature, probs_feature, cnts_feature), dim=-1)
+        elif self.use_iou and self.use_cnt:
+            non_visual_input = torch.cat((cls_loss_feature, reg_loss_feature, probs_feature, ious_feature, cnts_feature), dim=-1)
+        else:
+            non_visual_input = torch.cat((cls_loss_feature, reg_loss_feature, probs_feature), dim=-1)
         return self.predictor(non_visual_input)
 
 
@@ -521,8 +548,12 @@ class LOSS(nn.Module):
             self.uncertainty_cls_weight = self.transformer_cfg.uncertainty_cls_weight
             self.uncertainty_reg_weight = self.transformer_cfg.uncertainty_reg_weight
             self.uncertainty_embedding_dim = self.transformer_cfg.uncertainty_embedding_dim
+            self.use_iou = self.transformer_cfg.use_iou
+            self.use_cnt = self.transformer_cfg.use_cnt
             self.uncertainty_predictor = UncertaintyWithLossFeature(class_num=self.config.class_num,
-                                                                    embedding_dim=self.uncertainty_embedding_dim)
+                                                                    embedding_dim=self.uncertainty_embedding_dim,
+                                                                    use_iou=self.use_iou,
+                                                                    use_cnt=self.use_cnt)
 
 
     def forward(self, inputs):
@@ -555,7 +586,7 @@ class LOSS(nn.Module):
                 bbox_weight = None
 
         if hasattr(self.config, 'transformer_cfg'):
-            label_weight, bbox_weight, _ = self.predict_weight(cls_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds)
+            label_weight, bbox_weight, _ = self.predict_weight(cls_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds, cnt_logits)
         
         # [batch_size,sum(_h*_w)]
         if self.config.add_centerness:
@@ -576,7 +607,7 @@ class LOSS(nn.Module):
             total_loss = cls_loss + reg_loss
             return cls_loss, reg_loss, total_loss
 
-    def predict_weight(self, cls_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds):
+    def predict_weight(self, cls_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds, cnt_logits):
         
         mask = (cls_targets > 0).squeeze(dim=-1)
         
@@ -592,13 +623,17 @@ class LOSS(nn.Module):
         class_num = cls_logits[0].shape[1]
         cls_logits = cat(cls_logits, batch_size, class_num)
         reg_preds = cat(reg_preds, batch_size, reg_targets.shape[-1])
-        
+        if self.use_cnt:
+            cnt_logits = cat(cnt_logits, batch_size, 1)
+        else:
+            cnt_logits = None
         ious = []
         target_inds = []
         for batch_index in range(batch_size):
-            iou = giou_loss(pred=reg_preds[batch_index], target=reg_targets[batch_index], reduction='none')
-            iou[~mask[batch_index]] = 0.0
-            ious.append(iou)
+            if self.use_iou:
+                iou = giou_loss(pred=reg_preds[batch_index], target=reg_targets[batch_index], reduction='none')
+                iou[~mask[batch_index]] = 0.0
+                ious.append(iou)
             target_pos = cls_targets[batch_index]
             # sparse-->onehot
             target_pos = (torch.arange(1, class_num + 1, device=target_pos.device)[None, :] == target_pos).float()
@@ -610,12 +645,16 @@ class LOSS(nn.Module):
         total_scores = torch.zeros_like(cls_logits, dtype=torch.float32, device=cls_logits.device)
         total_scores[pos_inds] = postive_score
 
-        ious = torch.stack(ious, dim=0).unsqueeze(dim=-1)
+        if self.use_iou:
+            ious = torch.stack(ious, dim=0).unsqueeze(dim=-1)
+        else:
+            ious = None
         uncertainty_prediction = self.uncertainty_predictor(
             cls_logits.sum(dim=-1).unsqueeze(dim=-1).detach().data,
             reg_preds.detach().data,
             total_scores,
             ious,
+            cnt_logits.detach().data if cnt_logits is not None else None,
         )
         
         # losses = dict()
