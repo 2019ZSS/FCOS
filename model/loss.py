@@ -649,7 +649,7 @@ class LOSS(nn.Module):
         # total_scores[pos_inds] = postive_score
         total_scores, _ = torch.max(cls_logits.sigmoid(), dim=-1)
         total_scores[~mask] = 0.0
-        print(total_scores.shape)
+        total_scores = total_scores.unsqueeze(dim=-1)
         if self.use_iou:
             ious = torch.stack(ious, dim=0).unsqueeze(dim=-1)
         else:
