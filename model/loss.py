@@ -569,6 +569,7 @@ class LOSS(nn.Module):
             cls_logits, cnt_logits, reg_preds = preds
         else:
             cls_logits, reg_preds = preds
+            cnt_logits = None
 
         if self.config.add_centerness:
             if self.config.is_generate_weight:
@@ -584,9 +585,10 @@ class LOSS(nn.Module):
                 cls_targets, reg_targets = targets
                 label_weight = None
                 bbox_weight = None
+            cnt_targets = None
 
         if hasattr(self.config, 'transformer_cfg'):
-            label_weight, bbox_weight, _ = self.predict_weight(cls_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds, cnt_logits)
+            label_weight, bbox_weight, _ = self.predict_weight(cls_targets, cnt_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds, cnt_logits)
         
         # [batch_size,sum(_h*_w)]
         if self.config.add_centerness:
@@ -607,7 +609,7 @@ class LOSS(nn.Module):
             total_loss = cls_loss + reg_loss
             return cls_loss, reg_loss, total_loss
 
-    def predict_weight(self, cls_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds, cnt_logits):
+    def predict_weight(self, cls_targets, cnt_targets, reg_targets, label_weight, bbox_weight, cls_logits, reg_preds, cnt_logits):
         
         mask = (cls_targets > 0).squeeze(dim=-1)
         
@@ -625,6 +627,7 @@ class LOSS(nn.Module):
         reg_preds = cat(reg_preds, batch_size, reg_targets.shape[-1])
         if self.use_cnt:
             cnt_logits = cat(cnt_logits, batch_size, 1)
+            cnt_logits[(cnt_targets > -1).squeeze(dim=-1)] = 0.0
         else:
             cnt_logits = None
         ious = []

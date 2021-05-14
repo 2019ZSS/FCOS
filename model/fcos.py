@@ -19,12 +19,14 @@ class FCOS(nn.Module):
         if config.use_simo:
             self.fpn = SIMO(encoder_cfg=config.encoder_cfg, 
                             backbone_level_used=config.backbone_level_used,
-                            features=config.fpn_out_channels,
+                            features=config.fpn_out_channels,        
                             use_dcn_out=config.use_dcn_out)
         else:
             self.fpn = FPN(config.backbone_in_channls, 
                             config.fpn_out_channels,
-                            use_p5=config.use_p5)
+                            use_p5=config.use_p5,
+                            use_dcn_in=config.use_dcn_in,
+                            use_dcn_out=config.use_dcn_out)
         if config.use_gl:
             self.head = GFLHead(in_channel=config.fpn_out_channels, class_num=config.class_num,
                                     score_threshold=config.score_threshold, nms_iou_threshold=config.nms_iou_threshold,

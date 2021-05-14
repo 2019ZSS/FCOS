@@ -58,7 +58,8 @@ class DefaultConfig():
         fpn_out_channels=256
         use_p5=True
         use_simo=False
-        use_dcn_out=False
+        use_dcn_in=True
+        use_dcn_out=True
         use_ircnn=False
         encoder_cfg = DilatedEncoderConfig()
         backbone_level_used = 2
