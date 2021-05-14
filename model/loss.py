@@ -30,7 +30,7 @@ class UncertaintyWithLossFeature(nn.Module):
             nn.ReLU()
         )
         self.prob_net = nn.Sequential(
-            nn.Linear(in_features=self.class_num, out_features=self.embedding_dim),
+            nn.Linear(in_features=1, out_features=self.embedding_dim),
             nn.ReLU(),
             nn.Linear(in_features=self.embedding_dim,
                       out_features=self.embedding_dim),
@@ -627,27 +627,29 @@ class LOSS(nn.Module):
         reg_preds = cat(reg_preds, batch_size, reg_targets.shape[-1])
         if self.use_cnt:
             cnt_logits = cat(cnt_logits, batch_size, 1)
-            cnt_logits[(cnt_targets > -1).squeeze(dim=-1)] = 0.0
+            cnt_logits[~mask] = 0.0
         else:
             cnt_logits = None
         ious = []
-        target_inds = []
+        # target_inds = []
         for batch_index in range(batch_size):
             if self.use_iou:
                 iou = giou_loss(pred=reg_preds[batch_index], target=reg_targets[batch_index], reduction='none')
                 iou[~mask[batch_index]] = 0.0
                 ious.append(iou)
-            target_pos = cls_targets[batch_index]
-            # sparse-->onehot
-            target_pos = (torch.arange(1, class_num + 1, device=target_pos.device)[None, :] == target_pos).float()
-            target_inds.append(target_pos) 
+            # target_pos = cls_targets[batch_index]
+            # # sparse-->onehot
+            # target_pos = (torch.arange(1, class_num + 1, device=target_pos.device)[None, :] == target_pos).float()
+            # target_inds.append(target_pos) 
         
-        target_inds = torch.stack(target_inds)
-        pos_inds = (target_inds > 0)
-        postive_score = cls_logits[pos_inds].sigmoid()
-        total_scores = torch.zeros_like(cls_logits, dtype=torch.float32, device=cls_logits.device)
-        total_scores[pos_inds] = postive_score
-
+        # target_inds = torch.stack(target_inds)
+        # pos_inds = (target_inds > 0)
+        # postive_score = cls_logits[pos_inds].sigmoid()
+        # total_scores = torch.zeros_like(cls_logits, dtype=torch.float32, device=cls_logits.device)
+        # total_scores[pos_inds] = postive_score
+        total_scores, _ = torch.max(cls_logits.sigmoid(), dim=-1)
+        total_scores[~mask] = 0.0
+        print(total_scores.shape)
         if self.use_iou:
             ious = torch.stack(ious, dim=0).unsqueeze(dim=-1)
         else:
