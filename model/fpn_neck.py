@@ -14,7 +14,7 @@ class FPN(nn.Module):
     '''only for resnet50,101,152'''
     def __init__(self,backbone_in_channels=[512, 1024, 2048], features=256,use_p5=True, use_dcn_in=False, use_dcn_out=False):
         super(FPN,self).__init__()
-        if use_dcn_in:
+        if not use_dcn_in:
             self.prj_5 = nn.Conv2d(backbone_in_channels[2], features, kernel_size=1) # 降维，方便后面特征融合
             self.prj_4 = nn.Conv2d(backbone_in_channels[1], features, kernel_size=1)
             self.prj_3 = nn.Conv2d(backbone_in_channels[0], features, kernel_size=1)
@@ -22,7 +22,7 @@ class FPN(nn.Module):
             self.prj_5 = DeformConv2d(backbone_in_channels[2], features, kernel_size=1) # 降维，方便后面特征融合
             self.prj_4 = DeformConv2d(backbone_in_channels[1], features, kernel_size=1)
             self.prj_3 = DeformConv2d(backbone_in_channels[0], features, kernel_size=1)
-        if use_dcn_out:
+        if not use_dcn_out:
             self.conv_5 = nn.Conv2d(features, features, kernel_size=3, padding=1)
             self.conv_4 = nn.Conv2d(features, features, kernel_size=3, padding=1)
             self.conv_3 = nn.Conv2d(features, features, kernel_size=3, padding=1)
@@ -39,7 +39,7 @@ class FPN(nn.Module):
                 self.conv_out6 = DeformConv2d(features, features, kernel_size=3, padding=1, stride=2)
             else:
                 self.conv_out6 = DeformConv2d(backbone_in_channels[-1], features, kernel_size=3, padding=1, stride=2)
-            self.conv_out7 = nn.DeformConv2d(features, features, kernel_size=3, padding=1, stride=2)
+            self.conv_out7 = DeformConv2d(features, features, kernel_size=3, padding=1, stride=2)
         self.use_p5=use_p5
         self.apply(self.init_conv_kaiming)
         
